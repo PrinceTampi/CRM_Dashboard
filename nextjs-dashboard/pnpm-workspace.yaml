@@ -1,6 +1,11 @@
 packages:
   - .
 allowBuilds:
+  '@prisma/engines': true
   bcrypt: true
+  esbuild: true
+  msgpackr-extract: true
+  prisma: true
   sharp: true
+  workerd: true
 minimumReleaseAge: 2880
