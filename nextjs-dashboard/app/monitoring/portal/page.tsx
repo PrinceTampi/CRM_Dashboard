@@ -1,5 +1,5 @@
-import { PortalOverview } from '@/component/pengecekan-ro/portal-overview';
+import { DashboardOverview } from '@/component/monitoring/dashboard-overview';
 
-export default function PortalPage() {
-	return <PortalOverview />;
+export default function MonitoringPage() {
+  return <DashboardOverview />;
 }

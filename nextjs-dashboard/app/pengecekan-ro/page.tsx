@@ -1,5 +1,5 @@
-import { CustomersPage } from '@/component/input-ahass/customers-page';
+import { PortalOverview } from '@/component/pengecekan-ro/portal-overview';
 
-export default function CustomersRoute() {
-  return <CustomersPage />;
+export default function PengecekanROPage() {
+  return <PortalOverview />;
 }

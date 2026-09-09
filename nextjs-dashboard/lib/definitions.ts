@@ -86,3 +86,74 @@ export type InvoiceForm = {
   amount: number;
   status: 'pending' | 'paid';
 };
+
+export type BirthdayCustomer = {
+  name: string;
+  birth: string;
+  phone: string;
+};
+
+export type EventRecord = {
+  name: string;
+  phone: string;
+  engine: string;
+  location?: string;
+  notes?: string;
+  date: string;
+  status?: string;
+  source?: string;
+};
+
+export type H2Record = {
+  name: string;
+  phone: string;
+  motor?: string;
+  contact?: string;
+  progress?: string;
+  prospek?: string;
+  next?: string;
+  date?: string;
+  engine?: string;
+};
+
+export type H3Record = {
+  name: string;
+  phone: string;
+  part?: string;
+  qty?: number;
+  price?: number;
+  total?: number;
+  date?: string;
+};
+
+export type H3ActivateRecord = {
+  name: string;
+  phone: string;
+  contact: string;
+  deal?: string;
+  date: string;
+};
+
+export type BirthdayFuRecord = {
+  name: string;
+  phone: string;
+  contact: string;
+  deal: string;
+  date: string;
+};
+
+export type UploadHistoryRecord = {
+  date: string;
+  type: string;
+  month: string;
+  count: number;
+  status: string;
+};
+
+export type IntegratedRecord = {
+  name: string;
+  phone: string;
+  engine: string;
+  source: string;
+  date: string;
+};
