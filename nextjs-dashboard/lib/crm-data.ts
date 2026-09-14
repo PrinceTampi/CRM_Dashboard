@@ -6,7 +6,10 @@ import type {
   H3ActivateRecord,
   BirthdayFuRecord,
   UploadHistoryRecord,
+  RepairOrderRecord,
+  LcrRecord,
 } from './definitions';
+import * as XLSX from 'xlsx';
 
 import rawBirthdayTuples from './data/birthday-curated.json';
 import eventAhassJson from './data/event-ahass.json';
@@ -79,6 +82,22 @@ export const initialBirthdayFu: BirthdayFuRecord[] = [
   { name: 'LITA CHRISTINA TIWOUW', phone: '085298018288', contact: 'WA Terkirim, Dibalas', deal: 'Deal', date: '2026-08-07' },
   { name: 'HENDRIK LUMA', phone: '082114563971', contact: 'Tidak Terhubung', deal: 'Tidak Deal', date: '2026-08-08' },
   { name: 'WAHYUDY KARAENG', phone: '081356666595', contact: 'Telp Terhubung', deal: 'Tidak Deal', date: '2026-08-09' },
+];
+
+export const initialRepairOrders: RepairOrderRecord[] = [
+  { no: 1, customer: 'ANWAR BOLONGGODU', phone: '08129059192', nik: '7171011205850001', engine: 'JFD2E 2447800', roNumber: 'RO-2026-0819', ahass: 'AHASS Malalayang', date: '2026-08-14', job: 'Paket Servis Lengkap + Ganti Oli', status: 'Sesuai', cost: 145000 },
+  { no: 2, customer: 'MELLISA CHRISTINE KAWATAK', phone: '081340127083', nik: '7171025508900002', engine: 'JFD2E 2538035', roNumber: 'RO-2026-0820', ahass: 'AHASS Kombos', date: '2026-08-14', job: 'Servis Ringan + Kampas Rem', status: 'Sudah Dicek', cost: 85000 },
+  { no: 3, customer: 'JEINNY SARAUN', phone: '081356666595', nik: '7171034807920003', engine: 'JFB1E 2042104', roNumber: 'RO-2026-0821', ahass: 'AHASS Paal Dua', date: '2026-08-15', job: 'Ganti CVT Belt & Roller', status: 'Perlu Review', cost: 210000 },
+  { no: 4, customer: 'SILVA MANGUNDAP', phone: '085340127588', nik: '7171044706960004', engine: 'JFP1E 1176207', roNumber: 'RO-2026-0822', ahass: 'AHASS Tuminting', date: '2026-08-15', job: 'Tune Up Injeksi', status: 'Belum Dicek', cost: 65000 },
+  { no: 5, customer: 'JERRY DOWONGI', phone: '081244385308', nik: '7171050101800005', engine: 'JFU1E 1062970', roNumber: 'RO-2026-0823', ahass: 'AHASS Malalayang', date: '2026-08-16', job: 'Servis Berkala 12.000 KM', status: 'Sesuai', cost: 175000 },
+  { no: 6, customer: 'NELLA NURMILA TONDAES', phone: '0895355861837', nik: '7171066202880006', engine: 'JFS1E 1055785', roNumber: 'RO-2026-0824', ahass: 'AHASS Kombos', date: '2026-08-17', job: 'Ganti Oli dan Filter', status: 'Sudah Dicek', cost: 120000 },
+];
+
+export const initialLcrData: LcrRecord[] = [
+  { name: 'RUSNIA PRIHANTINI', phone: '082292025051', nik: '7172016204790001', motor: 'BEAT SPORTY', district: 'Mapanget', status: 'Prospek', contact: 'Terhubung', result: 'Booking Service', date: '2026-08-12' },
+  { name: 'CHLAUDIA ELVIRA KOMALING', phone: '085358363499', nik: '7172024503880002', motor: 'VARIO 125', district: 'Wanea', status: 'Sudah Service', contact: 'Terhubung', result: 'Service Selesai', date: '2026-08-13' },
+  { name: 'ADITYO KUSWANTORO', phone: '081342933030', nik: '7172031201770003', motor: 'SCOOPY', district: 'Sario', status: 'Tidak Terhubung', contact: 'Tidak Terhubung', result: 'Follow Up Ulang', date: '2026-08-14' },
+  { name: 'RANDIKA R', phone: '081245667788', nik: '7172042201900004', motor: 'PCX 160', district: 'Malalayang', status: 'Booking', contact: 'Terhubung', result: 'Menunggu Jadwal', date: '2026-08-15' },
 ];
 
 const monthMap: Record<string, number> = {
@@ -168,4 +187,17 @@ export function downloadCsvFile(filename: string, headers: string[], rows: (stri
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+export function downloadExcelFile(
+  filename: string,
+  sheets: { name: string; rows: (string | number)[][] }[]
+) {
+  if (typeof window === 'undefined') return;
+  const workbook = XLSX.utils.book_new();
+  sheets.forEach(({ name, rows }) => {
+    const worksheet = XLSX.utils.aoa_to_sheet(rows);
+    XLSX.utils.book_append_sheet(workbook, worksheet, name.slice(0, 31));
+  });
+  XLSX.writeFile(workbook, filename);
 }

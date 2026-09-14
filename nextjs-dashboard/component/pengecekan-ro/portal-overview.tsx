@@ -2,34 +2,15 @@
 
 import React, { useState } from 'react';
 import { CrmShell } from '@/component/layout/crm-shell';
-
-type RORow = {
-  no: number;
-  customer: string;
-  phone: string;
-  engine: string;
-  roNumber: string;
-  ahass: string;
-  date: string;
-  job: string;
-  status: 'Belum Dicek' | 'Sudah Dicek' | 'Sesuai' | 'Tidak Sesuai' | 'Perlu Review';
-  cost: number;
-};
-
-const sampleROs: RORow[] = [
-  { no: 1, customer: 'ANWAR BOLONGGODU', phone: '08129059192', engine: 'JFD2E 2447800', roNumber: 'RO-2026-0819', ahass: 'AHASS Malalayang', date: '2026-08-14', job: 'Paket Servis Lengkap + Ganti Oli', status: 'Sesuai', cost: 145000 },
-  { no: 2, customer: 'MELLISA CHRISTINE KAWATAK', phone: '081340127083', engine: 'JFD2E 2538035', roNumber: 'RO-2026-0820', ahass: 'AHASS Kombos', date: '2026-08-14', job: 'Servis Ringan + Kampas Rem', status: 'Sudah Dicek', cost: 85000 },
-  { no: 3, customer: 'JEINNY SARAUN', phone: '081356666595', engine: 'JFB1E 2042104', roNumber: 'RO-2026-0821', ahass: 'AHASS Paal Dua', date: '2026-08-15', job: 'Ganti CVT Belt & Roller', status: 'Perlu Review', cost: 210000 },
-  { no: 4, customer: 'SILVA MANGUNDAP', phone: '085340127588', engine: 'JFP1E 1176207', roNumber: 'RO-2026-0822', ahass: 'AHASS Tuminting', date: '2026-08-15', job: 'Tune Up Injeksi', status: 'Belum Dicek', cost: 65000 },
-];
+import { initialRepairOrders } from '@/lib/crm-data';
 
 export function PortalOverview() {
   const [customerSearch, setCustomerSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('Semua');
-  const [selectedRO, setSelectedRO] = useState<RORow | null>(sampleROs[0]);
+  const [selectedRO, setSelectedRO] = useState(initialRepairOrders[0]);
 
-  const filteredROs = sampleROs.filter((ro) => {
-    const matchCust = !customerSearch || ro.customer.toLowerCase().includes(customerSearch.toLowerCase()) || ro.phone.includes(customerSearch) || ro.roNumber.toLowerCase().includes(customerSearch.toLowerCase());
+  const filteredROs = initialRepairOrders.filter((ro) => {
+    const matchCust = !customerSearch || ro.customer.toLowerCase().includes(customerSearch.toLowerCase()) || ro.phone.includes(customerSearch) || ro.nik.includes(customerSearch) || ro.roNumber.toLowerCase().includes(customerSearch.toLowerCase());
     const matchStatus = statusFilter === 'Semua' || ro.status === statusFilter;
     return matchCust && matchStatus;
   });
@@ -53,7 +34,7 @@ export function PortalOverview() {
               id="roSearchCustomer"
               className="filter-input"
               type="search"
-              placeholder="Nama, No HP, atau No RO"
+              placeholder="Nama, No HP, NIK, atau No RO"
               value={customerSearch}
               onChange={(e) => setCustomerSearch(e.target.value)}
             />
@@ -91,7 +72,7 @@ export function PortalOverview() {
               <i className="fas fa-file-invoice" aria-hidden="true" />
             </div>
             <div className="stat-info">
-              <div className="number">{sampleROs.length}</div>
+              <div className="number">{initialRepairOrders.length}</div>
               <div className="label">Total R.O</div>
             </div>
           </div>
@@ -100,7 +81,7 @@ export function PortalOverview() {
               <i className="fas fa-check" aria-hidden="true" />
             </div>
             <div className="stat-info">
-              <div className="number">{sampleROs.filter((r) => r.status === 'Sesuai').length}</div>
+              <div className="number">{initialRepairOrders.filter((r) => r.status === 'Sesuai').length}</div>
               <div className="label">R.O Terverifikasi</div>
             </div>
           </div>
@@ -109,7 +90,7 @@ export function PortalOverview() {
               <i className="fas fa-hourglass-half" aria-hidden="true" />
             </div>
             <div className="stat-info">
-              <div className="number">{sampleROs.filter((r) => r.status === 'Belum Dicek').length}</div>
+              <div className="number">{initialRepairOrders.filter((r) => r.status === 'Belum Dicek').length}</div>
               <div className="label">R.O Belum Dicek</div>
             </div>
           </div>
@@ -118,7 +99,7 @@ export function PortalOverview() {
               <i className="fas fa-triangle-exclamation" aria-hidden="true" />
             </div>
             <div className="stat-info">
-              <div className="number">{sampleROs.filter((r) => r.status === 'Perlu Review').length}</div>
+              <div className="number">{initialRepairOrders.filter((r) => r.status === 'Perlu Review').length}</div>
               <div className="label">R.O Bermasalah / Review</div>
             </div>
           </div>
@@ -135,6 +116,7 @@ export function PortalOverview() {
                   <th>No.</th>
                   <th>Customer</th>
                   <th>No HP</th>
+                  <th>NIK</th>
                   <th>Engine Number</th>
                   <th>No. R.O</th>
                   <th>AHASS</th>
@@ -157,6 +139,7 @@ export function PortalOverview() {
                     <td>{ro.no}</td>
                     <td><strong>{ro.customer}</strong></td>
                     <td>{ro.phone}</td>
+                    <td>{ro.nik}</td>
                     <td><code>{ro.engine}</code></td>
                     <td><strong>{ro.roNumber}</strong></td>
                     <td>{ro.ahass}</td>
@@ -191,7 +174,7 @@ export function PortalOverview() {
                 ))}
                 {filteredROs.length === 0 && (
                   <tr>
-                    <td colSpan={10}>
+                    <td colSpan={11}>
                       <div className="empty-state">
                         <i className="fas fa-clipboard" />
                         <strong>Tidak ada data Repair Order yang cocok</strong>
@@ -204,7 +187,7 @@ export function PortalOverview() {
             </table>
           </div>
           <div className="pagination-controls" aria-hidden="true">
-            <span className="page-info">Menampilkan {filteredROs.length} dari {sampleROs.length} R.O</span>
+            <span className="page-info">Menampilkan {filteredROs.length} dari {initialRepairOrders.length} R.O</span>
           </div>
         </div>
 
@@ -220,6 +203,10 @@ export function PortalOverview() {
               <div className="detail-row">
                 <span>No. HP</span>
                 <strong>{selectedRO ? selectedRO.phone : '—'}</strong>
+              </div>
+              <div className="detail-row">
+                <span>NIK</span>
+                <strong>{selectedRO ? selectedRO.nik : '—'}</strong>
               </div>
             </div>
             <div className="detail-block">

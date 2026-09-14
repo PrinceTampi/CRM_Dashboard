@@ -2,6 +2,14 @@
 
 Semua perubahan penting pada project dicatat di sini. Setiap entri harus menyertakan perubahan yang dilakukan dan to-do yang masih tersisa.
 
+### 2026-09-14 - Modul CRM tambahan
+
+- Menambahkan KPI RO bulanan per AHASS dan pencarian NIK pada pengecekan RO.
+- Menambahkan halaman Admin Field dan LCR dengan input hasil FU serta filter operasional.
+- Menambahkan Report Niguri H1/H2/H3, upload DMMS, KPB 1-4 berbasis tanggal faktur, dan export Excel multi-sheet.
+- Menyembunyikan subheader crumb di dekat logo/header.
+- To-do: sambungkan konfigurasi Admin, input LCR, dan upload DMMS ke persistence/database setelah kontrak data operasional disetujui.
+
 ## 2026-09-08
 
 ### Perbaikan freeze saat upload Excel

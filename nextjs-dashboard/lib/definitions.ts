@@ -104,6 +104,32 @@ export type EventRecord = {
   source?: string;
 };
 
+export type RepairOrderRecord = {
+  no: number;
+  customer: string;
+  phone: string;
+  nik: string;
+  engine: string;
+  roNumber: string;
+  ahass: string;
+  date: string;
+  job: string;
+  status: 'Belum Dicek' | 'Sudah Dicek' | 'Sesuai' | 'Tidak Sesuai' | 'Perlu Review';
+  cost: number;
+};
+
+export type LcrRecord = {
+  name: string;
+  phone: string;
+  nik: string;
+  motor: string;
+  district: string;
+  status: string;
+  contact: string;
+  result: string;
+  date: string;
+};
+
 export type H2Record = {
   name: string;
   phone: string;

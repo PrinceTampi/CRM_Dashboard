@@ -8,6 +8,7 @@ import {
   TOTAL_CUSTOMERS_MASTER,
   BIRTHDAY_TODAY_COUNT,
   BIRTHDAY_MONTH_COUNT,
+  initialRepairOrders,
   calculateAge,
   getBirthdayStatus,
   getBirthdaysForMonth,
@@ -54,6 +55,15 @@ export function DashboardOverview() {
   const birthdayTodayCount = BIRTHDAY_TODAY_COUNT;
   const totalMonthBirthdays = BIRTHDAY_MONTH_COUNT;
   const eventCount = initialEventData.length;
+  const monthlyRepairOrders = useMemo(
+    () => initialRepairOrders.filter((ro) => ro.date.startsWith(selectedMonth)),
+    [selectedMonth]
+  );
+  const roByAhass = useMemo(() => {
+    const counts = new Map<string, number>();
+    monthlyRepairOrders.forEach((ro) => counts.set(ro.ahass, (counts.get(ro.ahass) || 0) + 1));
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+  }, [monthlyRepairOrders]);
 
   // Pagination for birthday table
   const totalBdayPages = Math.max(1, Math.ceil(birthdayList.length / pageSize));
@@ -305,6 +315,35 @@ export function DashboardOverview() {
               </div>
               <div className="label">Registrasi Event (Aktif)</div>
             </div>
+          </div>
+
+          <div className="stat-card stat-static">
+            <div className="stat-icon red">
+              <i className="fas fa-file-invoice" aria-hidden="true" />
+            </div>
+            <div className="stat-info">
+              <div className="number">{monthlyRepairOrders.length}</div>
+              <div className="label">RO Bulanan Ganti (AHASS)</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <h3><i className="fas fa-wrench" aria-hidden="true" /> RO Bulanan per AHASS</h3>
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>AHASS</th><th style={{ textAlign: 'right' }}>Jumlah RO Ganti</th><th>Status Pengecekan</th></tr></thead>
+              <tbody>
+                {roByAhass.map(([ahass, count]) => (
+                  <tr key={ahass}>
+                    <td><strong>{ahass}</strong></td>
+                    <td className="num">{count}</td>
+                    <td><span className="badge info">Tersedia di Pengecekan RO</span></td>
+                  </tr>
+                ))}
+                {roByAhass.length === 0 && <tr><td colSpan={3} className="empty-state">Belum ada RO pada periode ini.</td></tr>}
+              </tbody>
+            </table>
           </div>
         </div>
 

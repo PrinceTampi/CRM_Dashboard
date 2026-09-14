@@ -42,6 +42,10 @@ const navItems: NavGroup[] = [
     { label: 'Input AHASS', path: '/input-ahass', icon: 'fa-pen-alt' },
     { label: 'Pengecekan R.O', path: '/pengecekan-ro', icon: 'fa-clipboard-check' },
   ]},
+  { section: 'Admin & Follow-up', items: [
+    { label: 'Admin Field', path: '/admin', icon: 'fa-sliders' },
+    { label: 'LCR', path: '/lcr', icon: 'fa-filter-circle-dollar' },
+  ]},
   { section: 'Data & Integration', items: [
     { label: 'Upload & Integrasi', path: '/upload', icon: 'fa-upload' },
   ]},
@@ -50,7 +54,7 @@ const navItems: NavGroup[] = [
     { label: 'SMART BIRTH', path: '/smartbirth', icon: 'fa-bullseye' },
   ]},
   { section: 'Service & Part', items: [
-    { label: 'Niguri H3', path: '/niguri-h3', icon: 'fa-chart-simple' },
+    { label: 'Report Niguri', path: '/niguri', icon: 'fa-chart-simple', altPaths: ['/niguri-h3'] },
   ]},
   { section: 'Customer Performance', items: [
     { label: 'Monitoring RCR', path: '/monitoring-rcr', icon: 'fa-rotate' },
@@ -198,9 +202,6 @@ export function CrmShell({ title, crumb = 'Main', children }: CrmShellProps) {
                   <i className="fas fa-arrow-left" aria-hidden="true" /> Kembali
                 </button>
                 <div className="title-area">
-                  <span className="page-crumb" id="pageCrumb">
-                    {crumb}
-                  </span>
                   <h1 className="page-title" id="pageTitle">
                     {title}
                   </h1>
