@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
 import { prisma } from '@/lib/prisma';
 import { buildProspectHeaderMap, normalizeProspectRow } from '@/lib/import/prospect';
+import { safeRawJson } from '@/lib/upload-safe';
 
 function parseCsvLine(line: string): string[] {
   const cells: string[] = [];
@@ -101,7 +102,7 @@ export async function POST(request: NextRequest) {
         create: parsedRows.map((item, index) => ({
           sheetName: targetSheet.sheetName,
           rowNumber: index + 2,
-          rawData: JSON.parse(JSON.stringify({ row: item.raw, headerMap: mappedHeaders })) as any,
+          rawData: safeRawJson({ row: item.raw, headerMap: mappedHeaders }) as any,
           status: item.leadId ? 'VALID' : 'WARNING',
           importedEntity: 'prospect-lead',
           errorMessage: item.leadId ? null : 'MISSING_LEAD_ID',

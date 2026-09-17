@@ -130,3 +130,78 @@ export function validateLcrPayload(input: unknown) {
     },
   };
 }
+
+export function validateUserCreatePayload(input: unknown) {
+  const schema = z.object({
+    name: z.any(),
+    email: z.any(),
+    password: z.any(),
+    role: z.any().optional(),
+  });
+
+  const parsed = schema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false as const,
+      message: 'Payload akun tidak valid.',
+      issues: parsed.error.issues.map((issue) => issue.message),
+    };
+  }
+
+  const name = normalizeName(parsed.data.name);
+  const email = sanitizeText(parsed.data.email).toLowerCase();
+  const password = sanitizeText(parsed.data.password);
+  const role = sanitizeText(parsed.data.role).toUpperCase();
+
+  if (!name) {
+    return { ok: false as const, message: 'Nama akun wajib diisi.' };
+  }
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { ok: false as const, message: 'Email akun harus valid.' };
+  }
+
+  if (password.length < 6) {
+    return { ok: false as const, message: 'Password minimal 6 karakter.' };
+  }
+
+  if (role !== 'ADMIN' && role !== 'AHASS') {
+    return { ok: false as const, message: 'Role akun harus ADMIN atau AHASS.' };
+  }
+
+  return {
+    ok: true as const,
+    data: {
+      name,
+      email,
+      password,
+      role: role as 'ADMIN' | 'AHASS',
+    },
+  };
+}
+
+export function validatePasswordUpdatePayload(input: unknown) {
+  const schema = z.object({
+    password: z.any(),
+  });
+
+  const parsed = schema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false as const,
+      message: 'Payload password tidak valid.',
+      issues: parsed.error.issues.map((issue) => issue.message),
+    };
+  }
+
+  const password = sanitizeText(parsed.data.password);
+
+  if (password.length < 6) {
+    return { ok: false as const, message: 'Password baru minimal 6 karakter.' };
+  }
+
+  return {
+    ok: true as const,
+    data: { password },
+  };
+}

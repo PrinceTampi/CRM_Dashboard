@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { validateEventPayload, validateLcrPayload } from './validation.ts';
+import { validateEventPayload, validateLcrPayload, validatePasswordUpdatePayload, validateUserCreatePayload } from './validation.ts';
 
 test('validateEventPayload rejects invalid phone and short engine numbers', () => {
   const invalid = validateEventPayload({
@@ -41,4 +41,25 @@ test('validateLcrPayload normalizes contact data and preserves required values',
   assert.equal(result.data?.name, 'Test');
   assert.equal(result.data?.phone, '081234567890');
   assert.equal(result.data?.nik, '3201010101010001');
+});
+
+test('validateUserCreatePayload and validatePasswordUpdatePayload enforce admin account rules', () => {
+  const created = validateUserCreatePayload({
+    name: '  Admin Baru  ',
+    email: 'admin.baru@example.com',
+    password: 'secret123',
+    role: 'admin',
+  });
+
+  assert.equal(created.ok, true);
+  assert.equal(created.data?.role, 'ADMIN');
+  assert.equal(created.data?.email, 'admin.baru@example.com');
+
+  const updated = validatePasswordUpdatePayload({ password: 'newPassword123' });
+  assert.equal(updated.ok, true);
+  assert.equal(updated.data?.password, 'newPassword123');
+
+  const invalidPassword = validatePasswordUpdatePayload({ password: '123' });
+  assert.equal(invalidPassword.ok, false);
+  assert.match(invalidPassword.message ?? '', /minimal 6/i);
 });

@@ -1,17 +1,10 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CrmShell } from '@/component/layout/crm-shell';
+import { CrmShell, useCrmToast } from '@/component/layout/crm-shell';
 import { downloadCsvFile, getToday } from '@/lib/crm-data';
 import { getClientErrorMessage, safeFetchJson } from '@/lib/client-safe';
 import type { UploadHistoryRecord, IntegratedRecord } from '@/lib/definitions';
-
-type UploadAlertType = 'success' | 'error';
-
-type UploadAlert = {
-  type: UploadAlertType;
-  text: string;
-};
 
 type UploadTypeOption = {
   value: string;
@@ -43,28 +36,6 @@ function getUploadEndpoint(type: string) {
     default:
       return '/api/upload/h23';
   }
-}
-
-function UploadAlertBanner({ alert }: { alert: UploadAlert | null }) {
-  if (!alert) return null;
-
-  const isSuccess = alert.type === 'success';
-
-  return (
-    <div
-      className={`alert ${alert.type}`}
-      style={{
-        marginTop: '16px',
-        padding: '12px 14px',
-        borderRadius: '6px',
-        background: isSuccess ? '#ECFDF3' : '#FEF2F2',
-        color: isSuccess ? '#166534' : '#991B1B',
-        fontSize: '13px',
-      }}
-    >
-      <i className={`fas ${isSuccess ? 'fa-check-circle' : 'fa-exclamation-circle'}`} /> {alert.text}
-    </div>
-  );
 }
 
 function SummaryStatCard({
@@ -178,11 +149,13 @@ function ActionButton({
   tone,
   onClick,
   icon,
+  disabled = false,
 }: {
   label: string;
   tone: ActionButtonTone;
   onClick: () => void;
   icon: string;
+  disabled?: boolean;
 }) {
   const buttonStyles: Record<ActionButtonTone, { background: string; color: string }> = {
     primary: { background: '#CC0000', color: '#fff' },
@@ -196,13 +169,15 @@ function ActionButton({
       type="button"
       className="btn-submit"
       onClick={onClick}
+      disabled={disabled}
       style={{
         ...buttonStyles[tone],
         padding: '10px 18px',
         border: 'none',
         borderRadius: '6px',
         fontWeight: 600,
-        cursor: 'pointer',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.7 : 1,
         display: 'inline-flex',
         alignItems: 'center',
         gap: '6px',
@@ -241,12 +216,13 @@ function PaginationControls({
 }
 
 export function UploadView() {
+  const { showToast } = useCrmToast();
   const [history, setHistory] = useState<UploadHistoryRecord[]>([]);
   const [selectedType, setSelectedType] = useState('H1');
   const [selectedMonth, setSelectedMonth] = useState('2026-08');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [uploadAlert, setUploadAlert] = useState<UploadAlert | null>(null);
-  const [integrateAlert, setIntegrateAlert] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const [integratedData, setIntegratedData] = useState<IntegratedRecord[]>([]);
   const [page, setPage] = useState(1);
@@ -296,39 +272,39 @@ export function UploadView() {
 
     if (!allowedExtensions.includes(extension)) {
       setSelectedFile(null);
-      setUploadAlert({
-        type: 'error',
-        text: 'Format file tidak didukung. Gunakan file CSV/XLS/XLSX.',
-      });
+      showToast('error', 'Format file tidak didukung. Gunakan file CSV/XLS/XLSX.');
       return;
     }
 
     if (file.size > 10 * 1024 * 1024) {
       setSelectedFile(null);
-      setUploadAlert({
-        type: 'error',
-        text: 'Ukuran file terlalu besar. Maksimal 10 MB.',
-      });
+      showToast('error', 'Ukuran file terlalu besar. Maksimal 10 MB.');
       return;
     }
 
     setSelectedFile(file);
-    setUploadAlert({
-      type: 'success',
-      text: `File "${file.name}" (${(file.size / 1024).toFixed(1)} KB) siap diupload.`,
-    });
+    showToast('info', `File "${file.name}" (${(file.size / 1024).toFixed(1)} KB) siap diupload.`);
   };
 
   const processUpload = async (typeOverride?: string) => {
     const type = typeOverride || selectedType;
 
     if (!selectedFile) {
-      setUploadAlert({
-        type: 'error',
-        text: 'Pilih atau seret file Excel/CSV terlebih dahulu.',
-      });
+      showToast('warning', 'Pilih atau seret file Excel/CSV terlebih dahulu.');
       return;
     }
+
+    if (isUploading) {
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadProgress(8);
+    showToast('info', `Upload ${selectedFile.name} sedang diproses. Mohon tunggu.`);
+
+    const progressTimer = window.setInterval(() => {
+      setUploadProgress((current) => Math.min(current + Math.max(1, Math.round((92 - current) / 8)), 92));
+    }, 450);
 
     const formData = new FormData();
     formData.append('file', selectedFile);
@@ -349,10 +325,7 @@ export function UploadView() {
       }));
 
       if (!response.ok || !payload?.ok) {
-        setUploadAlert({
-          type: 'error',
-          text: payload?.message || 'Upload data gagal diproses.',
-        });
+        showToast('error', payload?.message || 'Upload data gagal diproses.');
         return;
       }
 
@@ -366,16 +339,22 @@ export function UploadView() {
       };
 
       setHistory((current) => [newRecord, ...current]);
-      setUploadAlert({
-        type: 'success',
-        text: `Upload file "${selectedFile.name}" untuk data ${type} berhasil diproses (${count} baris).`,
-      });
+      const importedRows = typeof payload.importedRows === 'number' ? payload.importedRows : count;
+      const updatedRows = typeof payload.updatedSales === 'number' ? payload.updatedSales : 0;
+      const warnings = typeof payload.warnings === 'number' ? payload.warnings : 0;
+      showToast(
+        warnings > 0 ? 'warning' : 'success',
+        `Upload "${selectedFile.name}" selesai: ${importedRows} baris diproses, ${updatedRows} data diperbarui${warnings > 0 ? `, ${warnings} warning` : ''}.`,
+      );
+      setUploadProgress(100);
+      await new Promise((resolve) => window.setTimeout(resolve, 350));
       setSelectedFile(null);
     } catch (error) {
-      setUploadAlert({
-        type: 'error',
-        text: getClientErrorMessage(error, 'Upload data gagal diproses.'),
-      });
+      showToast('error', getClientErrorMessage(error, 'Upload data gagal diproses.'));
+    } finally {
+      window.clearInterval(progressTimer);
+      setIsUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -393,15 +372,9 @@ export function UploadView() {
 
       const rows = data?.rows ?? [];
       setIntegratedData(rows);
-      setIntegrateAlert({
-        type: 'success',
-        text: `Integrasi berhasil diselesaikan! ${rows.length} data konsumen terhubung lintas sistem AHASS, H1, H2, dan H3.`,
-      });
+      showToast('success', `Integrasi berhasil diselesaikan! ${rows.length} data konsumen terhubung lintas sistem AHASS, H1, H2, dan H3.`);
     } catch (error) {
-      setIntegrateAlert({
-        type: 'error',
-        text: getClientErrorMessage(error, 'Integrasi gagal dimuat. Silakan coba lagi.'),
-      });
+      showToast('error', getClientErrorMessage(error, 'Integrasi gagal dimuat. Silakan coba lagi.'));
     }
   };
 
@@ -417,7 +390,7 @@ export function UploadView() {
 
   const handleDownloadIntegrated = () => {
     if (integratedData.length === 0) {
-      alert('Jalankan integrasi terlebih dahulu untuk menghasilkan data.');
+      showToast('warning', 'Jalankan integrasi terlebih dahulu untuk menghasilkan data.');
       return;
     }
 
@@ -442,6 +415,7 @@ export function UploadView() {
       label={buttonLabel}
       tone={tone}
       icon="fa-file-upload"
+      disabled={isUploading}
       onClick={() => processUpload(type)}
     />
   );
@@ -482,7 +456,18 @@ export function UploadView() {
           </div>
 
           <FileDropZone selectedFile={selectedFile} onFileSelected={handleFileSelection} />
-          <UploadAlertBanner alert={uploadAlert} />
+          {isUploading && (
+            <div className="upload-progress" role="status" aria-live="polite">
+              <div className="upload-progress-label">
+                <span>Data sedang diupload dan diproses...</span>
+                <strong>{uploadProgress}%</strong>
+              </div>
+              <div className="upload-progress-track" aria-hidden="true">
+                <div className="upload-progress-bar" style={{ width: `${uploadProgress}%` }} />
+              </div>
+              <p className="upload-progress-hint">Jangan tutup halaman sampai proses selesai.</p>
+            </div>
+          )}
 
           <h3 style={{ marginTop: '24px' }}>
             <i className="fas fa-clock-rotate-left" aria-hidden="true" /> Riwayat Upload
@@ -508,22 +493,6 @@ export function UploadView() {
             <ActionButton label="Jalankan Integrasi" tone="navy" icon="fa-sync-alt" onClick={handleRunIntegration} />
             <ActionButton label="Download CSV" tone="green" icon="fa-download" onClick={handleDownloadIntegrated} />
           </div>
-
-          {integrateAlert && (
-            <div
-              className={`alert ${integrateAlert.type}`}
-              style={{
-                padding: '12px 14px',
-                borderRadius: '6px',
-                background: integrateAlert.type === 'success' ? '#ECFDF3' : '#FEF2F2',
-                color: integrateAlert.type === 'success' ? '#166534' : '#991B1B',
-                fontSize: '13px',
-                marginBottom: '16px',
-              }}
-            >
-              <i className={`fas ${integrateAlert.type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}`} /> {integrateAlert.text}
-            </div>
-          )}
 
           <h4 style={{ fontWeight: 600, fontSize: '14px', margin: '16px 0 12px' }}>
             <i className="fas fa-table" aria-hidden="true" /> Data Terintegrasi{' '}

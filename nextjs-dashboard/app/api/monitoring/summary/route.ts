@@ -97,8 +97,7 @@ export async function GET(request: NextRequest) {
 
     const birthdayMonthCount = birthdayList.filter((customer) => {
       const birthDate = new Date(customer.birth);
-      const monthStr = monthKeyFromDate(birthDate);
-      return monthStr === selectedMonth;
+      return birthDate.getMonth() === monthDate.getMonth();
     }).length;
 
     const eventList = eventRegistrations.map((event) => ({

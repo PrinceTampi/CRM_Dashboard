@@ -3,6 +3,7 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { signOut } from 'next-auth/react';
 import { downloadCsvFile } from '@/lib/crm-data';
 
 export type ModalState = {
@@ -66,6 +67,41 @@ type CrmShellProps = {
   crumb?: string;
   children: React.ReactNode;
 };
+
+export type ToastType = 'success' | 'error' | 'warning' | 'info';
+
+type Toast = {
+  id: number;
+  type: ToastType;
+  message: string;
+};
+
+const ToastContext = createContext<{
+  showToast: (type: ToastType, message: string) => void;
+}>({
+  showToast: () => {},
+});
+
+export const useCrmToast = () => useContext(ToastContext);
+
+function ToastStack({ toasts, onClose }: { toasts: Toast[]; onClose: (id: number) => void }) {
+  return (
+    <div className="toast-stack" aria-live="polite" aria-atomic="false">
+      {toasts.map((toast) => (
+        <div key={toast.id} className={`toast toast-${toast.type}`} role={toast.type === 'error' ? 'alert' : 'status'}>
+          <i
+            className={`fas ${toast.type === 'success' ? 'fa-circle-check' : toast.type === 'error' ? 'fa-circle-exclamation' : toast.type === 'warning' ? 'fa-triangle-exclamation' : 'fa-circle-info'}`}
+            aria-hidden="true"
+          />
+          <span>{toast.message}</span>
+          <button type="button" onClick={() => onClose(toast.id)} aria-label="Tutup notifikasi">
+            <i className="fas fa-xmark" aria-hidden="true" />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function SidebarBrand() {
   return (
@@ -132,11 +168,13 @@ function HeaderBar({
   currentDate,
   onToggleMenu,
   onBack,
+  onLogout,
 }: {
   title: string;
   currentDate: string;
   onToggleMenu: () => void;
   onBack: () => void;
+  onLogout: () => void;
 }) {
   return (
     <header className="dash-header">
@@ -158,8 +196,13 @@ function HeaderBar({
           </h1>
         </div>
       </div>
-      <div className="date-badge" id="dashDate">
-        {currentDate}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <button type="button" className="btn-reset" onClick={onLogout}>
+          <i className="fas fa-right-from-bracket" aria-hidden="true" /> Keluar
+        </button>
+        <div className="date-badge" id="dashDate">
+          {currentDate}
+        </div>
       </div>
     </header>
   );
@@ -217,6 +260,7 @@ export function CrmShell({ title, crumb = 'Main', children }: CrmShellProps) {
     title: '',
     body: null,
   });
+  const [toasts, setToasts] = useState<Toast[]>([]);
 
   useEffect(() => {
     const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
@@ -242,6 +286,22 @@ export function CrmShell({ title, crumb = 'Main', children }: CrmShellProps) {
     setModal((prev) => ({ ...prev, isOpen: false }));
   };
 
+  const showToast = (type: ToastType, message: string) => {
+    const id = Date.now() + Math.random();
+    setToasts((current) => [...current, { id, type, message }].slice(-4));
+    window.setTimeout(() => {
+      setToasts((current) => current.filter((toast) => toast.id !== id));
+    }, 5000);
+  };
+
+  const closeToast = (id: number) => {
+    setToasts((current) => current.filter((toast) => toast.id !== id));
+  };
+
+  const handleLogout = async () => {
+    await signOut({ callbackUrl: '/login' });
+  };
+
   const isItemActive = (path: string, altPaths?: string[]) => {
     if (pathname === path) return true;
     if (altPaths && altPaths.includes(pathname)) return true;
@@ -250,6 +310,7 @@ export function CrmShell({ title, crumb = 'Main', children }: CrmShellProps) {
 
   return (
     <ModalContext.Provider value={{ openModal, closeModal }}>
+      <ToastContext.Provider value={{ showToast }}>
       <div id="dashboardPage" className="page-container" style={{ display: 'block' }}>
         <div className={`app-shell ${collapsed ? 'sidebar-collapsed' : ''}`} id="appShell">
           <div
@@ -288,6 +349,7 @@ export function CrmShell({ title, crumb = 'Main', children }: CrmShellProps) {
               currentDate={currentDate}
               onToggleMenu={() => setMobileNavOpen(!mobileNavOpen)}
               onBack={() => router.push('/')}
+              onLogout={handleLogout}
             />
 
             <div className="dashboard-content">
@@ -298,6 +360,8 @@ export function CrmShell({ title, crumb = 'Main', children }: CrmShellProps) {
       </div>
 
       <CrmModal modal={modal} onClose={closeModal} />
+      <ToastStack toasts={toasts} onClose={closeToast} />
+      </ToastContext.Provider>
     </ModalContext.Provider>
   );
 }

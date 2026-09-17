@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
 import { prisma } from '@/lib/prisma';
 import { buildH23HeaderMap, normalizeH23Row, resolveH23ImportType, validateH23ImportType, validateH23RowContract } from '@/lib/import/h23';
+import { safeRawJson } from '@/lib/upload-safe';
 
 function parseCsvLine(line: string): string[] {
   const cells: string[] = [];
@@ -113,10 +114,10 @@ export async function POST(request: NextRequest) {
         create: parsedRows.map((item, index) => ({
           sheetName: targetSheet.sheetName,
           rowNumber: index + 2,
-          rawData: JSON.parse(JSON.stringify({
+          rawData: safeRawJson({
             row: item.raw,
             headerMap: mappedHeaders,
-          })) as any,
+          }) as any,
           status: item.transactionType && validateH23ImportType(importType, item.transactionType) && validateH23RowContract(importType, item) ? 'VALID' : 'WARNING',
           importedEntity: 'h23-entity',
           errorMessage: item.transactionType && validateH23ImportType(importType, item.transactionType) && validateH23RowContract(importType, item) ? null : 'TRANSACTION_TYPE_MISMATCH',

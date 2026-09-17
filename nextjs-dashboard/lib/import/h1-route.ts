@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { buildH1HeaderMap, normalizeH1Row } from './h1';
+import { safeRawJson } from '@/lib/upload-safe';
 
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
@@ -40,10 +41,10 @@ export async function POST(request: NextRequest) {
           {
             sheetName: 'H1',
             rowNumber: 2,
-            rawData: JSON.parse(JSON.stringify({
+            rawData: safeRawJson({
               row: sampleRow.raw,
               headerMap: map,
-            })) as any,
+            }) as any,
             status: 'VALID',
             importedEntity: 'H1Preview',
           },

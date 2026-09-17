@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
 import { prisma } from '@/lib/prisma';
 import { buildLcrHeaderMap, normalizeLcrRow } from '@/lib/import/lcr';
+import { safeRawJson } from '@/lib/upload-safe';
 
 function parseCsvLine(line: string): string[] {
   const cells: string[] = [];
@@ -101,7 +102,7 @@ export async function POST(request: NextRequest) {
         create: parsedRows.map((item, index) => ({
           sheetName: targetSheet.sheetName,
           rowNumber: index + 2,
-          rawData: JSON.parse(JSON.stringify({ row: item.raw, headerMap: mappedHeaders })) as any,
+          rawData: safeRawJson({ row: item.raw, headerMap: mappedHeaders }) as any,
           status: item.engineNumber ? 'VALID' : 'WARNING',
           importedEntity: 'lcr-campaign',
           errorMessage: item.engineNumber ? null : 'MISSING_ENGINE_NUMBER',

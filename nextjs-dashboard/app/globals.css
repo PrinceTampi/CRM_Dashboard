@@ -74,6 +74,73 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .page-container { width: 100%; }
 .page-container.hidden { display: none; }
 
+.toast-stack {
+  position: fixed;
+  top: 76px;
+  right: 20px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(420px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 12px 14px 14px;
+  border-left: 4px solid currentColor;
+  border-radius: 8px;
+  background: var(--white);
+  box-shadow: var(--shadow-md);
+  color: var(--text);
+  font-size: var(--fs-md);
+  line-height: 1.45;
+  pointer-events: auto;
+  animation: toast-in 0.2s ease-out;
+}
+
+.toast > i { margin-top: 2px; }
+.toast span { flex: 1; }
+.toast button { border: 0; background: transparent; color: var(--text-muted); cursor: pointer; padding: 0 2px; }
+.toast-success { color: var(--success); background: var(--success-bg); }
+.toast-error { color: var(--danger); background: var(--danger-bg); }
+.toast-warning { color: var(--warning); background: var(--warning-bg); }
+.toast-info { color: var(--info); background: var(--info-bg); }
+
+.upload-progress {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid #86EFAC;
+  border-radius: 8px;
+  background: #F0FDF4;
+  color: #166534;
+}
+
+.upload-progress-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.upload-progress-label strong { color: #15803D; }
+.upload-progress-track { height: 10px; margin-top: 10px; overflow: hidden; border-radius: 999px; background: #DCFCE7; }
+.upload-progress-bar { height: 100%; border-radius: inherit; background: #16A34A; transition: width 0.35s ease; }
+.upload-progress-hint { margin-top: 8px; color: #15803D; font-size: 12px; }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 640px) {
+  .toast-stack { top: 12px; right: 16px; left: 16px; width: auto; }
+}
+
 /* ========== LANDING ========== */
 #landingPage {
   min-height: 100vh;
