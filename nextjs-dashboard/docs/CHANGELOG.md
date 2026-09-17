@@ -2,6 +2,26 @@
 
 Semua perubahan penting pada project dicatat di sini. Setiap entri harus menyertakan perubahan yang dilakukan dan to-do yang masih tersisa.
 
+### 2026-09-17 - Hardening backend dan validasi runtime
+
+Perubahan:
+
+- Menambahkan validasi payload yang konsisten untuk event AHASS dan LCR sebelum menulis ke database.
+- Normalisasi nomor HP, nama, nomor mesin, dan field wajib agar data tidak masuk dalam format acak atau tidak valid.
+- Mengembalikan respon API yang lebih jelas saat request kosong, data tidak lengkap, atau format tidak sesuai.
+- Menyediakan test regresi untuk skenario valid dan invalid pada payload event serta LCR.
+- Menyederhanakan alur data agar API lebih siap untuk integrasi nyata dan debugging production.
+
+Validasi:
+
+- `node --test lib/validation.test.ts` berhasil dengan 2 testcase lolos.
+- Proyek tetap build sukses melalui `npm run build` sebelumnya.
+
+Catatan:
+
+- Fokus saat ini adalah hardening backend dan kesalahan runtime, bukan lagi sekadar menyiapkan UI atau mock data.
+- Masih diperlukan review lanjutan terhadap endpoint upload dan route yang belum memiliki pengecekan kontrak data seragam.
+
 ### 2026-09-14 - Modul CRM tambahan
 
 - Menambahkan KPI RO bulanan per AHASS dan pencarian NIK pada pengecekan RO.
