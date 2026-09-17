@@ -1,9 +1,22 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { CrmShell } from '@/component/layout/crm-shell';
-import { initialBirthdayMaster, initialBirthdayFu, getBirthdaysForMonth, downloadCsvFile } from '@/lib/crm-data';
-import type { BirthdayFuRecord } from '@/lib/definitions';
+import { downloadCsvFile } from '@/lib/crm-data';
+
+type BirthdayCustomer = {
+  name: string;
+  birth: string;
+  phone: string;
+};
+
+type BirthdayFollowUp = {
+  name: string;
+  phone: string;
+  contact: string;
+  deal: string;
+  date: string;
+};
 
 const monthOptions = [
   { value: '2026-08', label: 'Agustus 2026' },
@@ -12,24 +25,112 @@ const monthOptions = [
   { value: '2026-05', label: 'Mei 2026' },
 ];
 
+function StatCard({
+  icon,
+  value,
+  label,
+  tone,
+  variant = 'default',
+}: {
+  icon: string;
+  value: string | number;
+  label: string;
+  tone: 'blue' | 'green' | 'orange' | 'purple' | 'red';
+  variant?: 'default' | 'primary' | 'static';
+}) {
+  return (
+    <div className={`stat-card ${variant === 'primary' ? 'stat-primary' : ''} ${variant === 'static' ? 'stat-static' : ''}`}>
+      <div className={`stat-icon ${tone}`}>
+        <i className={`fas ${icon}`} aria-hidden="true" />
+      </div>
+      <div className="stat-info">
+        <div className="number">{value}</div>
+        <div className="label">{label}</div>
+      </div>
+    </div>
+  );
+}
+
+function SectionAction({
+  label,
+  onClick,
+}: {
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" className="btn-download" onClick={onClick}>
+      <i className="fas fa-download" aria-hidden="true" /> {label}
+    </button>
+  );
+}
+
+function PaginationControls({
+  page,
+  totalPages,
+  onPrev,
+  onNext,
+}: {
+  page: number;
+  totalPages: number;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <div className="pagination-controls">
+      <span className="page-info">
+        Halaman {page} dari {totalPages}
+      </span>
+      <div style={{ display: 'flex', gap: '4px' }}>
+        <button type="button" className="page-btn" disabled={page <= 1} onClick={onPrev}>&laquo;</button>
+        <button type="button" className="page-btn active">{page}</button>
+        <button type="button" className="page-btn" disabled={page >= totalPages} onClick={onNext}>&raquo;</button>
+      </div>
+    </div>
+  );
+}
+
 export function SmartBirthView() {
-  const [selectedMonth, setSelectedMonth] = useState('2026-08');
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [bdayPage, setBdayPage] = useState(1);
   const [fuPage, setFuPage] = useState(1);
+  const [birthdayCustomers, setBirthdayCustomers] = useState<BirthdayCustomer[]>([]);
+  const [fuList, setFuList] = useState<BirthdayFollowUp[]>([]);
+  const [loading, setLoading] = useState(true);
   const pageSize = 10;
 
-  // Birthday buyers simulated
-  const birthdayCustomers = useMemo(() => {
-    return getBirthdaysForMonth(initialBirthdayMaster, selectedMonth);
+  useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch(`/api/smartbirth?month=${encodeURIComponent(selectedMonth)}`, {
+          cache: 'no-store',
+        });
+        const payload = await response.json();
+        if (!active) return;
+        setBirthdayCustomers(payload.birthdayCustomers ?? []);
+        setFuList(payload.followUps ?? []);
+      } catch {
+        if (active) {
+          setBirthdayCustomers([]);
+          setFuList([]);
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    load();
+    return () => { active = false; };
   }, [selectedMonth]);
 
   const totalBirthday = birthdayCustomers.length;
-  // Let's create realistic buyers count
-  const buyersCount = Math.round(totalBirthday * 0.08); // 8% conversion
+  const buyersCount = 0;
   const convRate = totalBirthday > 0 ? ((buyersCount / totalBirthday) * 100).toFixed(1) : '0';
-  const salesContribution = '14.2%';
+  const salesContribution = '—';
 
-  // Detailed rows for birthday purchasers
   const birthdayPurchasers = useMemo(() => {
     return birthdayCustomers.slice(0, 100).map((c, i) => {
       const usesPromo = i % 4 === 0;
@@ -48,13 +149,11 @@ export function SmartBirthView() {
     return birthdayPurchasers.slice(start, start + pageSize);
   }, [birthdayPurchasers, bdayPage]);
 
-  // FU manual records
-  const fuList = initialBirthdayFu;
   const bfuTotal = fuList.length;
   const bfuTerhubung = fuList.filter((f) => f.contact.toLowerCase().includes('terhubung') || f.contact.toLowerCase().includes('dibalas')).length;
   const bfuDeal = fuList.filter((f) => f.deal.toLowerCase() === 'deal').length;
   const bfuConvRate = bfuTotal > 0 ? ((bfuDeal / bfuTotal) * 100).toFixed(1) + '%' : '0%';
-  const bfuContribRate = '3.8%';
+  const bfuContribRate = '—';
 
   const handleDownloadSmartBirthCsv = () => {
     downloadCsvFile(
@@ -102,55 +201,21 @@ export function SmartBirthView() {
             <i className="fas fa-filter" aria-hidden="true" /> Terapkan
           </button>
           <span id="smartBirthDataCount">
-            Menampilkan {totalBirthday.toLocaleString()} konsumen ultah periode ini
+            {loading ? 'Memuat data...' : `Menampilkan ${totalBirthday.toLocaleString()} konsumen ultah periode ini`}
           </span>
         </div>
 
         <div className="stats-grid">
-          <div className="stat-card stat-primary">
-            <div className="stat-icon blue">
-              <i className="fas fa-birthday-cake" aria-hidden="true" />
-            </div>
-            <div className="stat-info">
-              <div className="number">{totalBirthday.toLocaleString()}</div>
-              <div className="label">Total Konsumen Ulang Tahun</div>
-            </div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-icon green">
-              <i className="fas fa-shopping-cart" aria-hidden="true" />
-            </div>
-            <div className="stat-info">
-              <div className="number">{buyersCount}</div>
-              <div className="label">Pembeli (Pakai Promo)</div>
-            </div>
-          </div>
-          <div className="stat-card stat-static">
-            <div className="stat-icon orange">
-              <i className="fas fa-percent" aria-hidden="true" />
-            </div>
-            <div className="stat-info">
-              <div className="number">{convRate}%</div>
-              <div className="label">Conversion Rate</div>
-            </div>
-          </div>
-          <div className="stat-card stat-static">
-            <div className="stat-icon purple">
-              <i className="fas fa-hand-holding-usd" aria-hidden="true" />
-            </div>
-            <div className="stat-info">
-              <div className="number">{salesContribution}</div>
-              <div className="label">Sales Contribution</div>
-            </div>
-          </div>
+          <StatCard icon="fa-birthday-cake" value={totalBirthday.toLocaleString()} label="Total Konsumen Ulang Tahun" tone="blue" variant="primary" />
+          <StatCard icon="fa-shopping-cart" value={buyersCount} label="Pembeli (Pakai Promo)" tone="green" />
+          <StatCard icon="fa-percent" value={`${convRate}%`} label="Conversion Rate" tone="orange" variant="static" />
+          <StatCard icon="fa-hand-holding-usd" value={salesContribution} label="Sales Contribution" tone="purple" variant="static" />
         </div>
 
         <div className="card" style={{ marginTop: '16px' }}>
           <h3>
             <i className="fas fa-table" aria-hidden="true" /> Detail Pembelian Konsumen Ulang Tahun{' '}
-            <button type="button" className="btn-download" onClick={handleDownloadSmartBirthCsv}>
-              <i className="fas fa-download" aria-hidden="true" /> Download CSV
-            </button>
+            <SectionAction label="Download CSV" onClick={handleDownloadSmartBirthCsv} />
           </h3>
           <div className="table-wrap">
             <table>
@@ -164,7 +229,13 @@ export function SmartBirthView() {
                 </tr>
               </thead>
               <tbody id="smartBirthTableBody">
-                {pagedPurchasers.map((p, i) => (
+                {pagedPurchasers.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '18px' }}>
+                      {loading ? 'Memuat data...' : 'Belum ada data konsumen ulang tahun untuk bulan ini.'}
+                    </td>
+                  </tr>
+                ) : pagedPurchasers.map((p, i) => (
                   <tr key={i}>
                     <td><strong>{p.name}</strong></td>
                     <td>{p.birth}</td>
@@ -182,32 +253,12 @@ export function SmartBirthView() {
               </tbody>
             </table>
           </div>
-          <div className="pagination-controls">
-            <span className="page-info">
-              Halaman {bdayPage} dari {totalBdayPages}
-            </span>
-            <div style={{ display: 'flex', gap: '4px' }}>
-              <button
-                type="button"
-                className="page-btn"
-                disabled={bdayPage <= 1}
-                onClick={() => setBdayPage((p) => Math.max(1, p - 1))}
-              >
-                &laquo;
-              </button>
-              <button type="button" className="page-btn active">
-                {bdayPage}
-              </button>
-              <button
-                type="button"
-                className="page-btn"
-                disabled={bdayPage >= totalBdayPages}
-                onClick={() => setBdayPage((p) => Math.min(totalBdayPages, p + 1))}
-              >
-                &raquo;
-              </button>
-            </div>
-          </div>
+          <PaginationControls
+            page={bdayPage}
+            totalPages={totalBdayPages}
+            onPrev={() => setBdayPage((p) => Math.max(1, p - 1))}
+            onNext={() => setBdayPage((p) => Math.min(totalBdayPages, p + 1))}
+          />
         </div>
 
         <div className="card" style={{ marginTop: '16px' }}>
@@ -215,51 +266,11 @@ export function SmartBirthView() {
             <i className="fas fa-headset" aria-hidden="true" /> Hasil FU Ulang Tahun (Upload Manual)
           </h3>
           <div className="stats-grid">
-            <div className="stat-card stat-static">
-              <div className="stat-icon blue">
-                <i className="fas fa-users" aria-hidden="true" />
-              </div>
-              <div className="stat-info">
-                <div className="number">{totalBirthday.toLocaleString()}</div>
-                <div className="label">Ulang Tahun (database)</div>
-              </div>
-            </div>
-            <div className="stat-card stat-static">
-              <div className="stat-icon cyan">
-                <i className="fas fa-motorcycle" aria-hidden="true" />
-              </div>
-              <div className="stat-info">
-                <div className="number">312</div>
-                <div className="label">Penjualan H1 bulan ini</div>
-              </div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-icon blue">
-                <i className="fas fa-phone-alt" aria-hidden="true" />
-              </div>
-              <div className="stat-info">
-                <div className="number">{bfuTotal}</div>
-                <div className="label">Total di-FU</div>
-              </div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-icon green">
-                <i className="fas fa-comment-dots" aria-hidden="true" />
-              </div>
-              <div className="stat-info">
-                <div className="number">{bfuTerhubung}</div>
-                <div className="label">Terhubung ({((bfuTerhubung / bfuTotal) * 100).toFixed(0)}%)</div>
-              </div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-icon purple">
-                <i className="fas fa-handshake" aria-hidden="true" />
-              </div>
-              <div className="stat-info">
-                <div className="number">{bfuDeal}</div>
-                <div className="label">Deal ({((bfuDeal / bfuTotal) * 100).toFixed(0)}%)</div>
-              </div>
-            </div>
+            <StatCard icon="fa-users" value={totalBirthday.toLocaleString()} label="Ulang Tahun (database)" tone="blue" variant="static" />
+            <StatCard icon="fa-motorcycle" value="—" label="Penjualan H1 bulan ini" tone="green" variant="static" />
+            <StatCard icon="fa-phone-alt" value={bfuTotal} label="Total di-FU" tone="blue" />
+            <StatCard icon="fa-comment-dots" value={bfuTerhubung} label={`Terhubung (${((bfuTerhubung / bfuTotal) * 100).toFixed(0)}%)`} tone="green" />
+            <StatCard icon="fa-handshake" value={bfuDeal} label={`Deal (${((bfuDeal / bfuTotal) * 100).toFixed(0)}%)`} tone="purple" />
           </div>
 
           <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '12px 0' }}>
@@ -268,9 +279,7 @@ export function SmartBirthView() {
 
           <h4 style={{ fontWeight: 600, fontSize: '14px', marginBottom: '12px' }}>
             Detail Hasil FU Ulang Tahun{' '}
-            <button type="button" className="btn-download" onClick={handleDownloadFuCsv}>
-              <i className="fas fa-download" aria-hidden="true" /> Download CSV
-            </button>
+            <SectionAction label="Download CSV" onClick={handleDownloadFuCsv} />
           </h4>
           <div className="table-wrap">
             <table>
@@ -284,7 +293,13 @@ export function SmartBirthView() {
                 </tr>
               </thead>
               <tbody>
-                {fuList.map((f, i) => (
+                {fuList.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '18px' }}>
+                      {loading ? 'Memuat data...' : 'Belum ada data follow-up ulang tahun untuk bulan ini.'}
+                    </td>
+                  </tr>
+                ) : fuList.map((f, i) => (
                   <tr key={i}>
                     <td><strong>{f.name}</strong></td>
                     <td>{f.phone}</td>
@@ -294,7 +309,7 @@ export function SmartBirthView() {
                       </span>
                     </td>
                     <td>
-                      <span className={`badge ${f.deal === 'Deal' ? 'success' : 'warning'}`}>
+                      <span className={`badge ${f.deal.toLowerCase() === 'deal' ? 'success' : 'warning'}`}>
                         {f.deal}
                       </span>
                     </td>

@@ -1,19 +1,53 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { CrmShell, useCrmModal } from '@/component/layout/crm-shell';
 import {
-  initialBirthdayMaster,
-  initialEventData,
-  TOTAL_CUSTOMERS_MASTER,
-  BIRTHDAY_TODAY_COUNT,
-  BIRTHDAY_MONTH_COUNT,
-  initialRepairOrders,
   calculateAge,
   getBirthdayStatus,
-  getBirthdaysForMonth,
   downloadCsvFile,
 } from '@/lib/crm-data';
+import { getClientErrorMessage, safeFetchJson } from '@/lib/client-safe';
+
+type DashboardBirthday = {
+  name: string;
+  birth: string;
+  phone: string;
+};
+
+type DashboardEvent = {
+  name: string;
+  phone: string;
+  engine: string;
+  location?: string | null;
+  notes?: string | null;
+  date: string;
+};
+
+type DashboardRepairOrder = {
+  no: number;
+  customer: string;
+  phone: string;
+  nik: string;
+  engine: string;
+  roNumber: string;
+  ahass: string;
+  date: string;
+  job: string;
+  status: string;
+  cost: number;
+};
+
+type DashboardSummary = {
+  totalCustomers: number;
+  birthdayTodayCount: number;
+  birthdayMonthCount: number;
+  birthdayList: DashboardBirthday[];
+  eventList: DashboardEvent[];
+  monthlyRepairOrders: DashboardRepairOrder[];
+  roByAhass: Array<{ ahass: string; count: number }>;
+  salesTrend: Array<{ month: string; count: number }>;
+};
 
 const monthOptions = [
   { value: '2026-08', label: 'Agustus 2026' },
@@ -27,43 +61,85 @@ const monthOptions = [
   { value: '2025-12', label: 'Desember 2025' },
 ];
 
-const salesMonthly = [
-  { month: 'Jan', count: 18 },
-  { month: 'Feb', count: 12 },
-  { month: 'Mar', count: 24 },
-  { month: 'Apr', count: 19 },
-  { month: 'Mei', count: 28 },
-  { month: 'Jun', count: 22 },
-  { month: 'Jul', count: 31 },
-  { month: 'Agu', count: 15 },
-];
-
 export function DashboardOverview() {
   const { openModal } = useCrmModal();
 
-  const [selectedMonth, setSelectedMonth] = useState('2026-08');
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
   const [bdayPage, setBdayPage] = useState(1);
   const [eventPage, setEventPage] = useState(1);
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [loading, setLoading] = useState(true);
   const pageSize = 10;
 
-  // Filtered birthdays for selected month (30 per month in curated dataset)
-  const birthdayList = useMemo(() => {
-    return getBirthdaysForMonth(initialBirthdayMaster, selectedMonth);
+  useEffect(() => {
+    let active = true;
+
+    const loadSummary = async () => {
+      setLoading(true);
+
+      try {
+        const { data, error } = await safeFetchJson<DashboardSummary>(
+          `/api/monitoring/summary?month=${encodeURIComponent(selectedMonth)}`,
+          { cache: 'no-store' },
+          { totalCustomers: 0, birthdayTodayCount: 0, birthdayMonthCount: 0, birthdayList: [], eventList: [], monthlyRepairOrders: [], roByAhass: [], salesTrend: [] }
+        );
+
+        if (!active) return;
+
+        if (error) {
+          throw new Error(error);
+        }
+
+        setSummary(data ?? {
+          totalCustomers: 0,
+          birthdayTodayCount: 0,
+          birthdayMonthCount: 0,
+          birthdayList: [],
+          eventList: [],
+          monthlyRepairOrders: [],
+          roByAhass: [],
+          salesTrend: [],
+        });
+      } catch (error) {
+        if (active) {
+          console.error('Monitoring summary load error:', getClientErrorMessage(error));
+          setSummary({
+            totalCustomers: 0,
+            birthdayTodayCount: 0,
+            birthdayMonthCount: 0,
+            birthdayList: [],
+            eventList: [],
+            monthlyRepairOrders: [],
+            roByAhass: [],
+            salesTrend: [],
+          });
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadSummary();
+
+    return () => {
+      active = false;
+    };
   }, [selectedMonth]);
 
-  const totalMasterCount = TOTAL_CUSTOMERS_MASTER;
-  const birthdayTodayCount = BIRTHDAY_TODAY_COUNT;
-  const totalMonthBirthdays = BIRTHDAY_MONTH_COUNT;
-  const eventCount = initialEventData.length;
-  const monthlyRepairOrders = useMemo(
-    () => initialRepairOrders.filter((ro) => ro.date.startsWith(selectedMonth)),
-    [selectedMonth]
-  );
-  const roByAhass = useMemo(() => {
-    const counts = new Map<string, number>();
-    monthlyRepairOrders.forEach((ro) => counts.set(ro.ahass, (counts.get(ro.ahass) || 0) + 1));
-    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
-  }, [monthlyRepairOrders]);
+  const birthdayList = summary?.birthdayList ?? [];
+  const totalMasterCount = summary?.totalCustomers ?? 0;
+  const birthdayTodayCount = summary?.birthdayTodayCount ?? 0;
+  const totalMonthBirthdays = summary?.birthdayMonthCount ?? 0;
+  const eventList = summary?.eventList ?? [];
+  const eventCount = eventList.length;
+  const monthlyRepairOrders = summary?.monthlyRepairOrders ?? [];
+  const roByAhass = summary?.roByAhass ?? [];
+  const salesMonthly = summary?.salesTrend ?? [];
 
   // Pagination for birthday table
   const totalBdayPages = Math.max(1, Math.ceil(birthdayList.length / pageSize));
@@ -73,13 +149,13 @@ export function DashboardOverview() {
   }, [birthdayList, bdayPage]);
 
   // Pagination for all events table
-  const totalEventPages = Math.max(1, Math.ceil(initialEventData.length / pageSize));
+  const totalEventPages = Math.max(1, Math.ceil(eventList.length / pageSize));
   const pagedEvents = useMemo(() => {
     const start = (eventPage - 1) * pageSize;
-    return initialEventData.slice(start, start + pageSize);
-  }, [eventPage]);
+    return eventList.slice(start, start + pageSize);
+  }, [eventList, eventPage]);
 
-  const recentEvents = initialEventData.slice(-3).reverse();
+  const recentEvents = eventList.slice(-3).reverse();
 
   const handleDownloadBirthdayCsv = () => {
     downloadCsvFile(
@@ -99,7 +175,7 @@ export function DashboardOverview() {
     downloadCsvFile(
       'Seluruh_Data_Event.csv',
       ['Nama', 'No HP', 'No Mesin', 'Lokasi', 'Catatan', 'Tanggal Input'],
-      initialEventData.map((e) => [
+      eventList.map((e) => [
         e.name,
         e.phone,
         e.engine,
@@ -124,7 +200,7 @@ export function DashboardOverview() {
               </tr>
             </thead>
             <tbody>
-              {initialBirthdayMaster.slice(0, 50).map((c, i) => (
+              {birthdayList.slice(0, 50).map((c, i) => (
                 <tr key={i}>
                   <td>{c.name}</td>
                   <td>{c.birth}</td>
@@ -134,14 +210,14 @@ export function DashboardOverview() {
             </tbody>
           </table>
           <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px' }}>
-            Menampilkan data master konsumen CRM (21.386 data terdaftar).
+            Menampilkan data master konsumen CRM ({totalMasterCount.toLocaleString('id-ID')} data terdaftar).
           </p>
         </div>,
         () =>
           downloadCsvFile(
             'Master_Konsumen.csv',
             ['Nama', 'Tanggal Lahir', 'No HP'],
-            initialBirthdayMaster.map((c) => [c.name, c.birth, c.phone])
+            birthdayList.map((c) => [c.name, c.birth, c.phone])
           )
       );
     } else if (type === 'today') {
@@ -196,7 +272,7 @@ export function DashboardOverview() {
       );
     } else if (type === 'event') {
       openModal(
-        `Registrasi Event AHASS (${initialEventData.length} data)`,
+        `Registrasi Event AHASS (${eventList.length} data)`,
         <div className="table-wrap">
           <table>
             <thead>
@@ -209,7 +285,7 @@ export function DashboardOverview() {
               </tr>
             </thead>
             <tbody>
-              {initialEventData.map((e, i) => (
+              {eventList.map((e, i) => (
                 <tr key={i}>
                   <td>{e.name}</td>
                   <td>{e.phone}</td>
@@ -226,7 +302,7 @@ export function DashboardOverview() {
     }
   };
 
-  const maxSales = Math.max(...salesMonthly.map((s) => s.count));
+  const maxSales = Math.max(0, ...salesMonthly.map((s) => s.count));
 
   return (
     <CrmShell title="Monitoring" crumb="Main">
@@ -334,14 +410,18 @@ export function DashboardOverview() {
             <table>
               <thead><tr><th>AHASS</th><th style={{ textAlign: 'right' }}>Jumlah RO Ganti</th><th>Status Pengecekan</th></tr></thead>
               <tbody>
-                {roByAhass.map(([ahass, count]) => (
+                {roByAhass.map(({ ahass, count }) => (
                   <tr key={ahass}>
                     <td><strong>{ahass}</strong></td>
                     <td className="num">{count}</td>
                     <td><span className="badge info">Tersedia di Pengecekan RO</span></td>
                   </tr>
                 ))}
-                {roByAhass.length === 0 && <tr><td colSpan={3} className="empty-state">Belum ada RO pada periode ini.</td></tr>}
+                {roByAhass.length === 0 && (
+                  <tr>
+                    <td colSpan={3} className="empty-state">Belum ada RO pada periode ini.</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -427,7 +507,7 @@ export function DashboardOverview() {
 
             <div className="pagination-controls" id="birthdayTablePagination">
               <span className="page-info">
-                Halaman {bdayPage} dari {totalBdayPages} ({birthdayList.length} data)
+                {loading ? 'Memuat data...' : `Halaman ${bdayPage} dari ${totalBdayPages} (${birthdayList.length} data)`}
               </span>
               <div style={{ display: 'flex', gap: '4px' }}>
                 <button
@@ -564,7 +644,7 @@ export function DashboardOverview() {
           </div>
           <div className="pagination-controls" id="allEventTablePagination">
             <span className="page-info">
-              Halaman {eventPage} dari {totalEventPages} ({initialEventData.length} data)
+              {loading ? 'Memuat data...' : `Halaman ${eventPage} dari ${totalEventPages} (${eventList.length} data)`}
             </span>
             <div style={{ display: 'flex', gap: '4px' }}>
               <button

@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { CrmShell } from '@/component/layout/crm-shell';
-import { initialH2Sample } from '@/lib/crm-data';
 
 function addMonths(date: string, monthsToAdd: number) {
   const value = new Date(`${date}T00:00:00`);
@@ -15,8 +14,31 @@ export function KpbView({ kpbNumber }: { kpbNumber: number }) {
   const offsets = [2, 4, 8, 12];
   const offset = offsets[kpbNumber - 1] || offsets[0];
   const [invoiceDate, setInvoiceDate] = useState('2026-01-15');
+  const [rows, setRows] = useState<Array<{ name: string; phone: string; motor: string; contact: string; progress: string }>>([]);
+  const [loading, setLoading] = useState(true);
   const targetDate = addMonths(invoiceDate, offset);
-  const rows = useMemo(() => initialH2Sample.slice(0, 12), []);
+
+  useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      setLoading(true);
+      try {
+        const month = invoiceDate.slice(0, 7);
+        const response = await fetch(`/api/niguri/h2?month=${month}`, { cache: 'no-store' });
+        const payload = await response.json();
+        if (!active) return;
+        setRows((payload.rows ?? []).slice(0, 12));
+      } catch {
+        if (active) setRows([]);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    load();
+    return () => { active = false; };
+  }, [invoiceDate]);
 
   return (
     <CrmShell title={`Niguri H2 - KPB ${kpbNumber}`} crumb="Service & Part">
@@ -44,7 +66,11 @@ export function KpbView({ kpbNumber }: { kpbNumber: number }) {
             <table className="niguri-table">
               <thead><tr><th>Nama</th><th>No HP</th><th>Motor</th><th>Tanggal Faktur</th><th>Target KPB {kpbNumber}</th><th>Status FU</th></tr></thead>
               <tbody>
-                {rows.map((row, index) => <tr key={`${row.phone}-${index}`}><td><strong>{row.name}</strong></td><td>{row.phone}</td><td>{row.motor || '-'}</td><td>{invoiceDate}</td><td>{targetDate}</td><td>{row.contact || 'Belum FU'}</td></tr>)}
+                {loading ? (
+                  <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '18px' }}>Memuat data...</td></tr>
+                ) : rows.length === 0 ? (
+                  <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '18px' }}>Belum ada data KPB untuk periode ini.</td></tr>
+                ) : rows.map((row, index) => <tr key={`${row.phone}-${index}`}><td><strong>{row.name}</strong></td><td>{row.phone}</td><td>{row.motor || '-'}</td><td>{invoiceDate}</td><td>{targetDate}</td><td>{row.contact || 'Belum FU'}</td></tr>)}
               </tbody>
             </table>
           </div>

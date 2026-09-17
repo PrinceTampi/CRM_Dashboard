@@ -1,49 +1,161 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { CrmShell } from '@/component/layout/crm-shell';
-import { initialEventData, getToday } from '@/lib/crm-data';
-import type { EventRecord } from '@/lib/definitions';
+import { getClientErrorMessage, isValidEngineNumber, isValidPhone, safeFetchJson } from '@/lib/client-safe';
+
+type EventRecord = {
+  id: string;
+  name: string;
+  phone: string;
+  engineNumber: string;
+  location: string | null;
+  notes: string | null;
+  eventDate: string;
+};
+
+function AlertBox({ alert }: { alert: { type: 'success' | 'error'; text: string } | null }) {
+  if (!alert) return null;
+
+  return (
+    <div
+      className={`alert ${alert.type}`}
+      style={{
+        marginTop: '16px',
+        padding: '12px 14px',
+        borderRadius: '6px',
+        background: alert.type === 'success' ? '#ECFDF3' : '#FEF2F2',
+        color: alert.type === 'success' ? '#166534' : '#991B1B',
+        fontSize: '13px',
+      }}
+    >
+      <i className={`fas ${alert.type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}`} />{' '}
+      {alert.text}
+    </div>
+  );
+}
+
+function CustomerTable({ events }: { events: EventRecord[] }) {
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Nama</th>
+            <th>HP</th>
+            <th>No Mesin</th>
+            <th>Tanggal</th>
+          </tr>
+        </thead>
+        <tbody>
+          {events.slice(0, 8).map((ev, index) => (
+            <tr key={`${ev.id ?? ev.phone}-${index}`}>
+              <td><strong>{ev.name}</strong></td>
+              <td>{ev.phone}</td>
+              <td><code>{ev.engineNumber}</code></td>
+              <td>{ev.eventDate}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 export function CustomersPage() {
-  const [events, setEvents] = useState<EventRecord[]>(initialEventData);
+  const [events, setEvents] = useState<EventRecord[]>([]);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [engine, setEngine] = useState('');
   const [location, setLocation] = useState('');
   const [notes, setNotes] = useState('');
   const [alertMsg, setAlertMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    let active = true;
+
+    const loadEvents = async () => {
+      const { data, error } = await safeFetchJson<{ events: EventRecord[] }>(
+        '/api/events',
+        { cache: 'no-store' },
+        { events: [] }
+      );
+
+      if (!active) return;
+      if (error) {
+        setEvents([]);
+        return;
+      }
+
+      setEvents(data?.events ?? []);
+    };
+
+    loadEvents();
+    return () => { active = false; };
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !phone.trim() || !engine.trim()) {
+    const trimmedName = name.trim();
+    const trimmedPhone = phone.trim();
+    const trimmedEngine = engine.trim();
+
+    if (!trimmedName || !trimmedPhone || !trimmedEngine) {
       setAlertMsg({ type: 'error', text: 'Nama, Nomor HP, dan Nomor Mesin wajib diisi.' });
       return;
     }
 
-    const newRecord: EventRecord = {
-      name: name.trim().toUpperCase(),
-      phone: phone.trim(),
-      engine: engine.trim().toUpperCase(),
-      location: location.trim() || undefined,
-      notes: notes.trim() || undefined,
-      date: getToday(),
-    };
+    if (!isValidPhone(trimmedPhone)) {
+      setAlertMsg({ type: 'error', text: 'Nomor HP tidak valid. Gunakan format yang benar (min. 9 digit).' });
+      return;
+    }
 
-    setEvents([newRecord, ...events]);
-    setName('');
-    setPhone('');
-    setEngine('');
-    setLocation('');
-    setNotes('');
-    setAlertMsg({
-      type: 'success',
-      text: `Data konsumen ${newRecord.name} berhasil disimpan ke registrasi event AHASS.`,
-    });
+    if (!isValidEngineNumber(trimmedEngine)) {
+      setAlertMsg({ type: 'error', text: 'Nomor mesin terlalu pendek atau tidak valid.' });
+      return;
+    }
 
-    setTimeout(() => {
-      setAlertMsg(null);
-    }, 4000);
+    setIsSubmitting(true);
+    try {
+      const { data, error } = await safeFetchJson<{ ok: boolean; event: EventRecord; message?: string }>(
+        '/api/events',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: trimmedName,
+            phone: trimmedPhone,
+            engine: trimmedEngine,
+            location: location.trim(),
+            notes: notes.trim(),
+          }),
+        }
+      );
+
+      if (error || !data?.ok || !data.event) {
+        throw new Error(error || data?.message || 'Gagal menyimpan data event.');
+      }
+
+      setEvents((current) => [data.event, ...current]);
+      setName('');
+      setPhone('');
+      setEngine('');
+      setLocation('');
+      setNotes('');
+      setAlertMsg({
+        type: 'success',
+        text: `Data konsumen ${data.event.name} berhasil disimpan ke registrasi event AHASS.`,
+      });
+    } catch (error) {
+      setAlertMsg({
+        type: 'error',
+        text: getClientErrorMessage(error, 'Gagal menyimpan data event AHASS.'),
+      });
+    } finally {
+      setIsSubmitting(false);
+      setTimeout(() => setAlertMsg(null), 4000);
+    }
   };
 
   const handleReset = () => {
@@ -144,8 +256,8 @@ export function CustomersPage() {
               </div>
 
               <div className="form-actions" style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-                <button type="submit" className="btn-submit" style={{ background: '#0B1E33', color: '#fff', padding: '10px 18px', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                  <i className="fas fa-save" aria-hidden="true" /> Simpan Data Konsumen
+                <button type="submit" className="btn-submit" disabled={isSubmitting} style={{ background: '#0B1E33', color: '#fff', padding: '10px 18px', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: isSubmitting ? 'not-allowed' : 'pointer', opacity: isSubmitting ? 0.7 : 1, display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <i className="fas fa-save" aria-hidden="true" /> {isSubmitting ? 'Menyimpan...' : 'Simpan Data Konsumen'}
                 </button>
                 <button
                   type="button"
@@ -158,50 +270,14 @@ export function CustomersPage() {
               </div>
             </form>
 
-            {alertMsg && (
-              <div
-                className={`alert ${alertMsg.type}`}
-                style={{
-                  marginTop: '16px',
-                  padding: '12px 14px',
-                  borderRadius: '6px',
-                  background: alertMsg.type === 'success' ? '#ECFDF3' : '#FEF2F2',
-                  color: alertMsg.type === 'success' ? '#166534' : '#991B1B',
-                  fontSize: '13px',
-                }}
-              >
-                <i className={`fas ${alertMsg.type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}`} />{' '}
-                {alertMsg.text}
-              </div>
-            )}
+            <AlertBox alert={alertMsg} />
           </div>
 
           <div className="card">
             <h3>
               <i className="fas fa-history" aria-hidden="true" /> Konsumen Baru Disimpan ({events.length})
             </h3>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Nama</th>
-                    <th>HP</th>
-                    <th>No Mesin</th>
-                    <th>Tanggal</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {events.slice(0, 8).map((ev, i) => (
-                    <tr key={i}>
-                      <td><strong>{ev.name}</strong></td>
-                      <td>{ev.phone}</td>
-                      <td><code>{ev.engine}</code></td>
-                      <td>{ev.date}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <CustomerTable events={events} />
           </div>
         </div>
       </div>

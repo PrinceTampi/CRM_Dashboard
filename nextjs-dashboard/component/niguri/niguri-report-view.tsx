@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { CrmShell } from '@/component/layout/crm-shell';
-import { downloadExcelFile, initialH2Sample } from '@/lib/crm-data';
+import { downloadExcelFile } from '@/lib/crm-data';
 
 const months = ['Jan-26', 'Feb-26', 'Mar-26', 'Apr-26', 'May-26', 'Jun-26', 'Jul-26', 'Aug-26'];
 const h1Metrics = ['Total Penjualan Part (Rp)', 'Analysis By', 'Data Filtering', 'SMS/WA Sent', 'Interest (M)', 'Workload from (M-1)', 'Prospect Customer (M-2)', 'Prospect Customer (M-1)', 'Total Data Di Follow Up', 'Contacted by Phone', 'Unreachable', 'Rejected', 'Workload', 'Total Prospect', 'Deal / Konsumen', 'Hot Prospect', 'Low Prospect', 'Not Deal', 'Penjualan Part (Rp)', 'Penjualan Part / Konsumen (Rp)', 'Penjualan Part / Total Penjualan Part (Rp)'];
@@ -20,11 +20,35 @@ export function NiguriReportView({ initialTab = 'h1' }: { initialTab?: 'h1' | 'h
   const [dealer, setDealer] = useState(dealerOptions[0]);
   const [dmmsFile, setDmmsFile] = useState('');
   const [invoiceDate, setInvoiceDate] = useState('2026-01-15');
-  const h2Rows = useMemo(() => initialH2Sample.slice(0, 12).map((row, index) => ({ ...row, invoiceDate: addMonths(invoiceDate, [2, 4, 8, 12][index % 4]), kpb: `KPB ${(index % 4) + 1}` })), [invoiceDate]);
+  const [h2Rows, setH2Rows] = useState<Array<{ name: string; phone: string; motor: string; contact: string; progress: string; invoiceDate: string; kpb: string }>>([]);
 
-  const h1Rows = [['Nama Dealer', dealer], ['MONTH', ...months], ['Data Source H2 to H1', 'H1 (HANYA BELI)', 'BELI DAN SERVICE - DEALER SENDIRI', 'HANYA SERVICE - DEALER LAIN'], ...h1Metrics.map((metric, index) => [metric, index === 0 ? 42500000 : index === 1 ? 'Dealer CRM' : index === 2 ? 'H1 / H2 / DMMS' : index % 5 === 0 ? 12 : index % 3 === 0 ? 68 : 0, index === 0 ? 19800000 : index % 4 === 0 ? 8 : 0, index === 0 ? 12700000 : index % 2 === 0 ? 5 : 0])];
-  const h2Export = [['BULAN REPORT', invoiceDate], ['DEALER', dealer], ['KPB', 'Tanggal Target', 'Total Data Source', 'Serviced', 'Not Yet Service', 'Contacted', 'Not Contacted', 'Workload', 'Total Visit KPB'], ...h2Rows.map((row) => [row.kpb, row.invoiceDate, row.name, row.contact || 'Belum FU', row.progress || 'Belum Service', row.contact?.includes('Terhubung') ? 1 : 0, row.contact?.includes('Terhubung') ? 0 : 1, row.prospek || 0, row.next || 0])];
-  const h3Rows = [['Nama Dealer', dealer], ['YEAR', '2026'], ['MONTH', ...months], ['Metric', 'H1 to H3', 'H2 to H3'], ...['Total Penjualan Part (Rp)', 'SMS/WA Sent', 'Interest (M)', 'Total Prospect', 'Deal / Konsumen', 'Penjualan Part / Konsumen (Rp)'].map((metric, index) => [metric, index === 0 ? 24850000 : index * 12, index === 0 ? 18420000 : index * 9])];
+  useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      try {
+        const month = invoiceDate.slice(0, 7);
+        const response = await fetch(`/api/niguri/h2?month=${month}`, { cache: 'no-store' });
+        const payload = await response.json();
+        if (!active) return;
+        const rows = (payload.rows ?? []).slice(0, 12);
+        setH2Rows(rows.map((row: any, index: number) => ({
+          ...row,
+          invoiceDate: addMonths(invoiceDate, [2, 4, 8, 12][index % 4]),
+          kpb: `KPB ${(index % 4) + 1}`,
+        })));
+      } catch {
+        if (active) setH2Rows([]);
+      }
+    };
+
+    load();
+    return () => { active = false; };
+  }, [invoiceDate]);
+
+  const h1Rows = [['Nama Dealer', dealer], ['MONTH', ...months], ['Data Source H2 to H1', 'Lorem ipsum', 'Lorem ipsum', 'Lorem ipsum'], ...h1Metrics.map((metric) => [metric, '—', '—', '—'])];
+  const h2Export = [['BULAN REPORT', invoiceDate], ['DEALER', dealer], ['KPB', 'Tanggal Target', 'Total Data Source', 'Serviced', 'Not Yet Service', 'Contacted', 'Not Contacted', 'Workload', 'Total Visit KPB'], ...h2Rows.map((row) => [row.kpb, row.invoiceDate, row.name, row.contact || 'Belum FU', row.progress || 'Belum Service', row.contact?.includes('Terhubung') ? 1 : 0, row.contact?.includes('Terhubung') ? 0 : 1, 0, 0])];
+  const h3Rows = [['Nama Dealer', dealer], ['YEAR', 'Belum tersedia'], ['MONTH', ...months], ['Metric', 'H1 to H3', 'H2 to H3'], ...['Total Penjualan Part (Rp)', 'SMS/WA Sent', 'Interest (M)', 'Total Prospect', 'Deal / Konsumen', 'Penjualan Part / Konsumen (Rp)'].map((metric) => [metric, '—', '—'])];
   const downloadReport = () => downloadExcelFile(`Report_Niguri_${dealer.replaceAll(' ', '_')}.xlsx`, [{ name: 'Niguri H1', rows: h1Rows }, { name: 'Niguri H2 KPB', rows: h2Export }, { name: 'Niguri H3', rows: h3Rows }]);
 
   return <CrmShell title="Report Niguri" crumb="Service & Part">

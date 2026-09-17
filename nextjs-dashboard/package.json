@@ -1,9 +1,12 @@
 {
+  "name": "one-dashboard-one-control",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "build": "next build --webpack",
     "dev": "next dev",
     "start": "next start",
+    "seed:users": "node script/seed-users.mjs",
     "postinstall": "prisma skills sync || exit 0"
   },
   "dependencies": {

@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { CrmShell } from '@/component/layout/crm-shell';
-import { initialH3Activate, downloadCsvFile } from '@/lib/crm-data';
+import { downloadCsvFile } from '@/lib/crm-data';
 import type { H3ActivateRecord } from '@/lib/definitions';
 
 const monthOptions = [
@@ -13,23 +13,100 @@ const monthOptions = [
 ];
 
 const matrixRows = [
-  { metric: 'Data Source Customer', h1_qty: 312, h1_pct: '100%', h2_qty: 245, h2_pct: '100%' },
-  { metric: 'Penjualan Part (Item)', h1_qty: 184, h1_pct: '59.0%', h2_qty: 156, h2_pct: '63.7%' },
-  { metric: 'Total Revenue Part (Rp)', h1_qty: '24.850.000', h1_pct: '—', h2_qty: '18.420.000', h2_pct: '—' },
-  { metric: 'Prospek Part (Follow Up)', h1_qty: 94, h1_pct: '30.1%', h2_qty: 78, h2_pct: '31.8%' },
-  { metric: 'Deal Part Konsumen', h1_qty: 62, h1_pct: '19.9%', h2_qty: 54, h2_pct: '22.0%' },
-  { metric: 'Conversion Rate', h1_qty: '19.9%', h1_pct: '—', h2_qty: '22.0%', h2_pct: '—' },
+  { metric: 'Data Source Customer', h1_qty: '—', h1_pct: '—', h2_qty: '—', h2_pct: '—' },
+  { metric: 'Penjualan Part (Item)', h1_qty: '—', h1_pct: '—', h2_qty: '—', h2_pct: '—' },
+  { metric: 'Total Revenue Part (Rp)', h1_qty: '—', h1_pct: '—', h2_qty: '—', h2_pct: '—' },
+  { metric: 'Prospek Part (Follow Up)', h1_qty: '—', h1_pct: '—', h2_qty: '—', h2_pct: '—' },
+  { metric: 'Deal Part Konsumen', h1_qty: '—', h1_pct: '—', h2_qty: '—', h2_pct: '—' },
+  { metric: 'Conversion Rate', h1_qty: '—', h1_pct: '—', h2_qty: '—', h2_pct: '—' },
 ];
+
+function NiguriStatCard({
+  icon,
+  value,
+  label,
+  tone,
+}: {
+  icon: string;
+  value: number | string;
+  label: string;
+  tone: 'teal' | 'blue' | 'green' | 'orange' | 'purple';
+}) {
+  return (
+    <div className="stat-card stat-static">
+      <div className={`stat-icon ${tone}`}>
+        <i className={`fas ${icon}`} aria-hidden="true" />
+      </div>
+      <div className="stat-info">
+        <div className="number">{value}</div>
+        <div className="label">{label}</div>
+      </div>
+    </div>
+  );
+}
+
+function PaginationControls({
+  page,
+  totalPages,
+  onPrev,
+  onNext,
+}: {
+  page: number;
+  totalPages: number;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <div className="pagination-controls">
+      <span className="page-info">Halaman {page} dari {totalPages}</span>
+      <div style={{ display: 'flex', gap: '4px' }}>
+        <button type="button" className="page-btn" disabled={page <= 1} onClick={onPrev}>&laquo;</button>
+        <button type="button" className="page-btn active">{page}</button>
+        <button type="button" className="page-btn" disabled={page >= totalPages} onClick={onNext}>&raquo;</button>
+      </div>
+    </div>
+  );
+}
 
 export function NiguriView() {
   const [selectedMonth, setSelectedMonth] = useState('2026-08');
   const [page, setPage] = useState(1);
+  const [actList, setActList] = useState<H3ActivateRecord[]>([]);
+  const [totalAct, setTotalAct] = useState(0);
+  const [terhubungCount, setTerhubungCount] = useState(0);
+  const [dealCount, setDealCount] = useState(0);
+  const [loading, setLoading] = useState(true);
   const pageSize = 10;
 
-  const actList = initialH3Activate;
-  const totalAct = actList.length;
-  const terhubungCount = actList.filter((a) => (a.contact || '').toLowerCase().includes('terhubung')).length;
-  const dealCount = Math.round(terhubungCount * 0.45);
+  useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch(`/api/niguri-h3?month=${selectedMonth}`, { cache: 'no-store' });
+        const payload = await response.json();
+        if (!active) return;
+        const rows = payload.rows ?? [];
+        setActList(rows);
+        setTotalAct(Number(payload.totalAct ?? rows.length));
+        setTerhubungCount(Number(payload.terhubungCount ?? 0));
+        setDealCount(Number(payload.dealCount ?? 0));
+      } catch {
+        if (active) {
+          setActList([]);
+          setTotalAct(0);
+          setTerhubungCount(0);
+          setDealCount(0);
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    load();
+    return () => { active = false; };
+  }, [selectedMonth]);
 
   const pctConnect = totalAct > 0 ? ((terhubungCount / totalAct) * 100).toFixed(0) : '0';
   const pctDeal = totalAct > 0 ? ((dealCount / totalAct) * 100).toFixed(0) : '0';
@@ -96,42 +173,10 @@ export function NiguriView() {
         </div>
 
         <div className="stats-grid">
-          <div className="stat-card stat-primary">
-            <div className="stat-icon teal">
-              <i className="fas fa-boxes" aria-hidden="true" />
-            </div>
-            <div className="stat-info">
-              <div className="number">340</div>
-              <div className="label">Total Part Terjual</div>
-            </div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-icon blue">
-              <i className="fas fa-money-bill-wave" aria-hidden="true" />
-            </div>
-            <div className="stat-info">
-              <div className="number">Rp 43.270.000</div>
-              <div className="label">Total Penjualan Part</div>
-            </div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-icon green">
-              <i className="fas fa-user-check" aria-hidden="true" />
-            </div>
-            <div className="stat-info">
-              <div className="number">172</div>
-              <div className="label">Total Prospect</div>
-            </div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-icon orange">
-              <i className="fas fa-handshake" aria-hidden="true" />
-            </div>
-            <div className="stat-info">
-              <div className="number">116</div>
-              <div className="label">Deal / Konsumen</div>
-            </div>
-          </div>
+          <NiguriStatCard icon="fa-boxes" value="—" label="Total Part Terjual" tone="teal" />
+          <NiguriStatCard icon="fa-money-bill-wave" value="—" label="Total Penjualan Part" tone="blue" />
+          <NiguriStatCard icon="fa-user-check" value="—" label="Total Prospect" tone="green" />
+          <NiguriStatCard icon="fa-handshake" value="—" label="Deal / Konsumen" tone="orange" />
         </div>
 
         <div className="card" style={{ marginTop: '16px' }}>
@@ -176,37 +221,13 @@ export function NiguriView() {
             <i className="fas fa-boxes" aria-hidden="true" /> Report H3 - Deal Prospek Sparepart (Upload Manual)
           </h3>
           <div className="stats-grid">
-            <div className="stat-card stat-static">
-              <div className="stat-icon blue">
-                <i className="fas fa-phone-alt" aria-hidden="true" />
-              </div>
-              <div className="stat-info">
-                <div className="number">{totalAct}</div>
-                <div className="label">Total Leads Activation</div>
-              </div>
-            </div>
-            <div className="stat-card stat-static">
-              <div className="stat-icon green">
-                <i className="fas fa-comment-dots" aria-hidden="true" />
-              </div>
-              <div className="stat-info">
-                <div className="number">{terhubungCount}</div>
-                <div className="label">Terhubung ({pctConnect}%)</div>
-              </div>
-            </div>
-            <div className="stat-card stat-static">
-              <div className="stat-icon purple">
-                <i className="fas fa-handshake" aria-hidden="true" />
-              </div>
-              <div className="stat-info">
-                <div className="number">{dealCount}</div>
-                <div className="label">Deal ({pctDeal}%)</div>
-              </div>
-            </div>
+            <NiguriStatCard icon="fa-phone-alt" value={totalAct} label="Total Leads Activation" tone="blue" />
+            <NiguriStatCard icon="fa-comment-dots" value={terhubungCount} label={`Terhubung (${pctConnect}%)`} tone="green" />
+            <NiguriStatCard icon="fa-handshake" value={dealCount} label={`Deal (${pctDeal}%)`} tone="purple" />
           </div>
 
           <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '12px 0' }}>
-            Leads <span>{totalAct}</span> · Terhubung <span>{terhubungCount}</span> · Deal <span>{dealCount}</span> · Conversion <strong>{convRate}</strong> · Contribution <strong>26.8%</strong> · DB H3 <span>177.473</span>
+            Leads <span>{totalAct}</span> · Terhubung <span>{terhubungCount}</span> · Deal <span>{dealCount}</span> · Conversion <strong>{convRate}</strong> · Contribution <strong>—</strong> · DB H3 <span>—</span>
           </p>
 
           <h4 style={{ fontWeight: 600, fontSize: '14px', marginBottom: '12px' }}>
@@ -247,32 +268,12 @@ export function NiguriView() {
               </tbody>
             </table>
           </div>
-          <div className="pagination-controls">
-            <span className="page-info">
-              Halaman {page} dari {totalPages}
-            </span>
-            <div style={{ display: 'flex', gap: '4px' }}>
-              <button
-                type="button"
-                className="page-btn"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                &laquo;
-              </button>
-              <button type="button" className="page-btn active">
-                {page}
-              </button>
-              <button
-                type="button"
-                className="page-btn"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              >
-                &raquo;
-              </button>
-            </div>
-          </div>
+          <PaginationControls
+            page={page}
+            totalPages={totalPages}
+            onPrev={() => setPage((p) => Math.max(1, p - 1))}
+            onNext={() => setPage((p) => Math.min(totalPages, p + 1))}
+          />
         </div>
       </div>
     </CrmShell>

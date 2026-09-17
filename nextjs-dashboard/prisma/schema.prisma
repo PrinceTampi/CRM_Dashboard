@@ -6,32 +6,459 @@ datasource db {
   provider = "postgresql"
 }
 
+enum UserRole {
+  ADMIN
+  AHASS
+}
+
+enum ImportStatus {
+  RECEIVED
+  VALIDATING
+  READY
+  PROCESSING
+  COMPLETED
+  COMPLETED_WITH_WARNINGS
+  FAILED
+}
+
+enum ImportRowStatus {
+  PENDING
+  VALID
+  WARNING
+  REJECTED
+  IMPORTED
+}
+
+enum H23TransactionType {
+  SERVICE
+  PART
+  PARTSERVICE
+}
+
 model User {
-  id       String @id @default(cuid())
-  name     String
-  email    String @unique
-  password String
+  id            String        @id @default(cuid())
+  name          String
+  email         String        @unique
+  passwordHash  String        @map("password_hash")
+  role          UserRole      @default(AHASS)
+  active        Boolean       @default(true)
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  importBatches ImportBatch[]
+
+  @@map("users")
+}
+
+model Dealer {
+  id                 String                @id @default(cuid())
+  code               String                @unique
+  name               String
+  address            String?
+  createdAt          DateTime              @default(now()) @map("created_at")
+  updatedAt          DateTime              @updatedAt @map("updated_at")
+  importBatches      ImportBatch[]
+  h1Sales            H1Sale[]
+  h23Invoices        H23Invoice[]
+  h2ServiceItems     H2ServiceItem[]
+  h3PartItems        H3PartItem[]
+  repairOrders       RepairOrder[]
+  lcrCampaignRecords LcrCampaignRecord[]
+  h3ActivationLeads  H3ActivationLead[]
+  prospectLeads      ProspectLead[]
+  niguriH1Snapshots  NiguriH1Snapshot[]
+  niguriH3Snapshots  NiguriH3Snapshot[]
+  lcrFollowUps       LcrFollowUp[]
+  eventRegistrations EventRegistration[]
+
+  @@map("dealers")
 }
 
 model Customer {
-  id        String    @id @default(cuid())
-  name      String
-  email     String    @unique
-  imageUrl  String?
-  invoices  Invoice[]
+  id                    String              @id @default(cuid())
+  name                  String
+  normalizedName        String              @map("normalized_name")
+  nik                   String?             @unique
+  birthDate             DateTime?           @map("birth_date") @db.Date
+  phone                 String?
+  alternatePhone        String?             @map("alternate_phone")
+  email                 String?
+  contactIdentityStatus String              @default("UNVERIFIED") @map("contact_identity_status")
+  createdAt             DateTime            @default(now()) @map("created_at")
+  updatedAt             DateTime            @updatedAt @map("updated_at")
+  vehicles              Vehicle[]
+  h1Sales               H1Sale[]
+  h23Invoices           H23Invoice[]
+  h2ServiceItems        H2ServiceItem[]
+  h3PartItems           H3PartItem[]
+  repairOrders          RepairOrder[]
+  h3ActivationLeads     H3ActivationLead[]
+  prospectLeads         ProspectLead[]
+  h2FollowUps           H2FollowUp[]
+  lcrFollowUps          LcrFollowUp[]
+  birthdayFollowUps     BirthdayFollowUp[]
+  eventRegistrations    EventRegistration[]
+
+  @@index([normalizedName])
+  @@index([phone])
+  @@map("customers")
 }
 
-model Invoice {
+model Vehicle {
+  id                 String                @id @default(cuid())
+  customerId         String                @map("customer_id")
+  engineNumber       String                @unique @map("engine_number")
+  frameNumber        String                @map("frame_number")
+  plateNumber        String?               @map("plate_number")
+  model              String?
+  color              String?
+  assemblyYear       Int?                  @map("assembly_year")
+  active             Boolean               @default(true)
+  customer           Customer              @relation(fields: [customerId], references: [id])
+  h1Sales            H1Sale[]
+  h23Invoices        H23Invoice[]
+  h2ServiceItems     H2ServiceItem[]
+  h3PartItems        H3PartItem[]
+  repairOrders       RepairOrder[]
+  lcrCampaignRecords LcrCampaignRecord[]
+
+  @@unique([engineNumber, frameNumber])
+  @@index([frameNumber])
+  @@map("vehicles")
+}
+
+model ImportBatch {
+  id           String        @id @default(cuid())
+  fileName     String        @map("file_name")
+  fileType     String        @map("file_type")
+  status       ImportStatus  @default(RECEIVED)
+  uploadedAt   DateTime      @default(now()) @map("uploaded_at")
+  uploadedById String        @map("uploaded_by_id")
+  dealerId     String?
+  uploadedBy   User          @relation(fields: [uploadedById], references: [id])
+  dealer       Dealer?       @relation(fields: [dealerId], references: [id])
+  rows         ImportRow[]
+  auditLogs    AuditLog[]
+
+  @@index([status, uploadedAt])
+  @@map("import_batches")
+}
+
+model ImportRow {
+  id               String          @id @default(cuid())
+  batchId          String          @map("batch_id")
+  sheetName        String          @map("sheet_name")
+  rowNumber        Int             @map("row_number")
+  rawData          Json            @map("raw_data")
+  status           ImportRowStatus @default(PENDING)
+  errorMessage     String?         @map("error_message")
+  importedEntity   String?          @map("imported_entity")
+  importedEntityId String?          @map("imported_entity_id")
+  batch            ImportBatch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  auditLogs        AuditLog[]
+
+  @@unique([batchId, sheetName, rowNumber])
+  @@map("import_rows")
+}
+
+model AuditLog {
+  id          String     @id @default(cuid())
+  batchId     String     @map("batch_id")
+  importRowId String?    @map("import_row_id")
+  rowNumber   Int?       @map("row_number")
+  fieldName   String?    @map("field_name")
+  errorCode   String     @map("error_code")
+  rawValue    Json?      @map("raw_value")
+  severity    String
+  action      String     @map("system_action")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  batch       ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  importRow   ImportRow?  @relation(fields: [importRowId], references: [id], onDelete: Cascade)
+
+  @@index([batchId, severity])
+  @@map("audit_logs")
+}
+
+model H1Sale {
+  id                  String    @id @default(cuid())
+  sourceNo            Int       @map("source_no")
+  dealerId            String    @map("dealer_id")
+  customerId          String    @map("customer_id")
+  vehicleId           String    @map("vehicle_id")
+  invoiceDate         DateTime  @map("invoice_date") @db.Date
+  paymentType         String    @map("payment_type")
+  leasingCode         String?   @map("leasing_code")
+  tenor               Int?
+  downPayment         Decimal?  @map("down_payment") @db.Decimal(14, 2)
+  verifiedDownPayment Decimal?  @map("verified_down_payment") @db.Decimal(14, 2)
+  verifiedTenor       Int?      @map("verified_tenor")
+  verifiedInstallment Decimal?  @map("verified_installment") @db.Decimal(14, 2)
+  status              String?
+  verificationStatus  String?   @map("verification_status")
+  ring                String?
+  salesForceCode      String?   @map("sales_force_code")
+  salesForce          String?
+  salesName           String?   @map("sales_name")
+  discountAmount      Decimal?  @map("discount_amount") @db.Decimal(14, 2)
+  importRowId         String?   @unique @map("import_row_id")
+  dealer              Dealer    @relation(fields: [dealerId], references: [id])
+  customer            Customer  @relation(fields: [customerId], references: [id])
+  vehicle             Vehicle   @relation(fields: [vehicleId], references: [id])
+  h2FollowUps         H2FollowUp[]
+
+  @@unique([dealerId, sourceNo, invoiceDate])
+  @@index([customerId, invoiceDate])
+  @@map("h1_sales")
+}
+
+model H23Invoice {
+  id              String          @id @default(cuid())
+  invoiceNumber   String          @map("invoice_number")
+  workOrderNumber String          @map("work_order_number")
+  invoiceDate     DateTime        @map("invoice_date") @db.Date
+  dealerId        String          @map("dealer_id")
+  customerId      String?         @map("customer_id")
+  vehicleId       String?         @map("vehicle_id")
+  importRowId     String?         @map("import_row_id")
+  dealer          Dealer          @relation(fields: [dealerId], references: [id])
+  customer        Customer?       @relation(fields: [customerId], references: [id])
+  vehicle         Vehicle?        @relation(fields: [vehicleId], references: [id])
+  serviceItems    H2ServiceItem[]
+  partItems       H3PartItem[]
+
+  @@unique([dealerId, invoiceNumber])
+  @@index([workOrderNumber])
+  @@map("h23_invoices")
+}
+
+model H2ServiceItem {
+  id                 String             @id @default(cuid())
+  invoiceId          String             @map("invoice_id")
+  customerId         String?            @map("customer_id")
+  vehicleId          String?            @map("vehicle_id")
+  dealerId           String             @map("dealer_id")
+  itemNumber         String             @map("item_number")
+  description        String
+  transactionType    H23TransactionType @default(SERVICE) @map("transaction_type")
+  quantity           Int
+  price              Decimal            @db.Decimal(14, 2)
+  grossAmount        Decimal            @map("gross_amount") @db.Decimal(14, 2)
+  discountRate       Decimal?           @map("discount_rate") @db.Decimal(6, 4)
+  discountAmount     Decimal?           @map("discount_amount") @db.Decimal(14, 2)
+  mechanicName       String?            @map("mechanic_name")
+  serviceAdvisorId   String?            @map("service_advisor_id")
+  serviceAdvisorName String?            @map("service_advisor_name")
+  invoice            H23Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  customer           Customer?          @relation(fields: [customerId], references: [id])
+  vehicle            Vehicle?           @relation(fields: [vehicleId], references: [id])
+  dealer             Dealer             @relation(fields: [dealerId], references: [id])
+
+  @@unique([invoiceId, itemNumber, transactionType])
+  @@map("h2_service_items")
+}
+
+model H3PartItem {
+  id              String             @id @default(cuid())
+  invoiceId       String             @map("invoice_id")
+  customerId      String?            @map("customer_id")
+  vehicleId       String?            @map("vehicle_id")
+  dealerId        String             @map("dealer_id")
+  itemNumber      String             @map("item_number")
+  description     String
+  transactionType H23TransactionType @map("transaction_type")
+  quantity        Int
+  price           Decimal            @db.Decimal(14, 2)
+  grossAmount     Decimal            @map("gross_amount") @db.Decimal(14, 2)
+  discountRate    Decimal?           @map("discount_rate") @db.Decimal(6, 4)
+  discountAmount  Decimal?           @map("discount_amount") @db.Decimal(14, 2)
+  groupPart       String?            @map("group_part")
+  invoice         H23Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  customer        Customer?          @relation(fields: [customerId], references: [id])
+  vehicle         Vehicle?           @relation(fields: [vehicleId], references: [id])
+  dealer          Dealer             @relation(fields: [dealerId], references: [id])
+
+  @@unique([invoiceId, itemNumber, transactionType])
+  @@map("h3_part_items")
+}
+
+model LovValue {
+  id             String              @id @default(cuid())
+  category       String
+  value          String
+  active         Boolean             @default(true)
+  contactLeads   H3ActivationLead[] @relation("ContactStatusLov")
+  notDealLeads   H3ActivationLead[] @relation("NotDealReasonLov")
+
+  @@unique([category, value])
+  @@map("lov_values")
+}
+
+model H3ActivationLead {
+  sourceId           Int       @id @map("source_id")
+  uploadedAt         DateTime  @map("uploaded_at")
+  assignedAt         DateTime? @map("assigned_at")
+  customerId         String?   @map("customer_id")
+  sourceData         String    @map("source_data")
+  mdCode             String    @map("md_code")
+  assignedDealerId   String?   @map("assigned_dealer_id")
+  followedUpAt       DateTime? @map("followed_up_at")
+  contactStatusLovId String?   @map("contact_status_lov_id")
+  contactLabel       String?   @map("contact_label")
+  progressStatus     String?   @map("progress_status")
+  prospectStatus     String?   @map("prospect_status")
+  notDealReasonLovId String?   @map("not_deal_reason_lov_id")
+  hasFollowUp        String    @map("has_follow_up")
+  customer           Customer? @relation(fields: [customerId], references: [id])
+  assignedDealer     Dealer?   @relation(fields: [assignedDealerId], references: [id])
+  contactStatusLov   LovValue? @relation("ContactStatusLov", fields: [contactStatusLovId], references: [id])
+  notDealReasonLov   LovValue? @relation("NotDealReasonLov", fields: [notDealReasonLovId], references: [id])
+
+  @@index([assignedDealerId, prospectStatus])
+  @@map("h3_activation_leads")
+}
+
+model ProspectLead {
+  leadId           String    @id @map("lead_id")
+  guestbookId      String?   @map("guestbook_id")
+  guestbookAt      DateTime? @map("guestbook_at")
+  customerId       String?   @map("customer_id")
+  salesChannel     String?   @map("sales_channel")
+  eventCode        String?   @map("event_code")
+  eventDescription String?   @map("event_description")
+  platform         String?
+  contactStatus    String?   @map("contact_status")
+  contactChannel   String?   @map("contact_channel")
+  nextFollowUp     DateTime? @map("next_follow_up")
+  slaDeadline      DateTime? @map("sla_deadline")
+  prospectType     String?   @map("prospect_type")
+  customerType     String?   @map("customer_type")
+  assignedDealerId String?   @map("assigned_dealer_id")
+  status           String
+  customer         Customer? @relation(fields: [customerId], references: [id])
+  assignedDealer   Dealer?   @relation(fields: [assignedDealerId], references: [id])
+
+  @@index([assignedDealerId, status])
+  @@map("prospect_leads")
+}
+
+model LcrCampaignRecord {
+  id              String    @id @default(cuid())
+  vehicleId       String    @map("vehicle_id")
+  dealerId        String    @map("dealer_id")
+  campaignCode    String    @map("campaign_code")
+  referenceFrame  String?   @map("reference_frame")
+  isTreated       Boolean   @default(false) @map("is_treated")
+  treatmentStatus String?   @map("treatment_status")
+  invoiceDate     DateTime? @map("invoice_date") @db.Date
+  vehicle         Vehicle   @relation(fields: [vehicleId], references: [id])
+  dealer          Dealer    @relation(fields: [dealerId], references: [id])
+
+  @@unique([vehicleId, campaignCode])
+  @@map("lcr_campaign_records")
+}
+
+model NiguriH1Snapshot {
+  id                      String   @id @default(cuid())
+  dealerId                String   @map("dealer_id")
+  month                   DateTime @db.Date
+  sourceCategory          String   @map("source_category")
+  totalDataSource         Int      @map("total_data_source")
+  totalDataAnalysisResult Int      @map("total_data_analysis_result")
+  totalDataFollowupPhone  Int      @map("total_data_followup_phone")
+  totalProspect           Int      @map("total_prospect")
+  totalCustomerDeal       Int      @map("total_customer_deal")
+  totalUnitSold           Int      @map("total_unit_sold")
+  dealer                  Dealer   @relation(fields: [dealerId], references: [id])
+
+  @@unique([dealerId, month, sourceCategory])
+  @@map("niguri_h1_snapshots")
+}
+
+model NiguriH3Snapshot {
+  id             String   @id @default(cuid())
+  dealerId       String   @map("dealer_id")
+  year           Int
+  month          String
+  pipeline       String
+  totalPartSales Decimal? @map("total_part_sales") @db.Decimal(16, 2)
+  totalFollowUp  Int      @map("total_follow_up")
+  totalProspect  Int      @map("total_prospect")
+  dealCustomer   Int      @map("deal_customer")
+  dealer         Dealer   @relation(fields: [dealerId], references: [id])
+
+  @@unique([dealerId, year, month, pipeline])
+  @@map("niguri_h3_snapshots")
+}
+
+model RepairOrder {
   id         String   @id @default(cuid())
-  customerId String
-  amount     Int
+  roNumber   String   @map("ro_number")
+  customerId String   @map("customer_id")
+  vehicleId  String   @map("vehicle_id")
+  dealerId   String   @map("dealer_id")
+  roDate     DateTime @map("ro_date") @db.Date
+  job        String
   status     String
-  date       DateTime @default(now())
+  cost       Decimal? @db.Decimal(14, 2)
   customer   Customer @relation(fields: [customerId], references: [id])
+  vehicle    Vehicle  @relation(fields: [vehicleId], references: [id])
+  dealer     Dealer   @relation(fields: [dealerId], references: [id])
+
+  @@unique([dealerId, roNumber])
+  @@map("repair_orders")
 }
 
-model Revenue {
-  id      Int    @id @default(autoincrement())
-  month   String @unique
-  revenue Int
+model H2FollowUp {
+  id            String    @id @default(cuid())
+  customerId    String    @map("customer_id")
+  h1SaleId      String?   @map("h1_sale_id")
+  contactStatus String?   @map("contact_status")
+  result        String?
+  followUpDate  DateTime  @map("follow_up_date") @db.Date
+  customer      Customer  @relation(fields: [customerId], references: [id])
+  h1Sale        H1Sale?   @relation(fields: [h1SaleId], references: [id])
+
+  @@index([customerId, followUpDate])
+  @@map("h2_follow_ups")
+}
+
+model LcrFollowUp {
+  id            String    @id @default(cuid())
+  customerId    String    @map("customer_id")
+  dealerId      String    @map("dealer_id")
+  status        String
+  contactStatus String?   @map("contact_status")
+  result        String?
+  followUpDate  DateTime  @map("follow_up_date") @db.Date
+  customer      Customer  @relation(fields: [customerId], references: [id])
+  dealer        Dealer    @relation(fields: [dealerId], references: [id])
+
+  @@index([dealerId, status])
+  @@map("lcr_follow_ups")
+}
+
+model BirthdayFollowUp {
+  id            String    @id @default(cuid())
+  customerId    String    @map("customer_id")
+  contactStatus String?   @map("contact_status")
+  dealStatus    String?   @map("deal_status")
+  followUpDate  DateTime  @map("follow_up_date") @db.Date
+  customer      Customer  @relation(fields: [customerId], references: [id])
+
+  @@index([customerId, followUpDate])
+  @@map("birthday_follow_ups")
+}
+
+model EventRegistration {
+  id           String    @id @default(cuid())
+  customerId   String    @map("customer_id")
+  dealerId     String?   @map("dealer_id")
+  engineNumber String    @map("engine_number")
+  location     String?
+  notes        String?
+  eventDate    DateTime  @map("event_date") @db.Date
+  customer     Customer  @relation(fields: [customerId], references: [id])
+  dealer       Dealer?   @relation(fields: [dealerId], references: [id])
+
+  @@index([customerId, eventDate])
+  @@map("event_registrations")
 }

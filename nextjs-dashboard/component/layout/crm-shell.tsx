@@ -67,6 +67,144 @@ type CrmShellProps = {
   children: React.ReactNode;
 };
 
+function SidebarBrand() {
+  return (
+    <div className="sidebar-brand">
+      <div
+        style={{
+          width: '40px',
+          height: '40px',
+          borderRadius: '6px',
+          background: '#CC0000',
+          color: '#FFFFFF',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontWeight: 800,
+          fontSize: '20px',
+          flexShrink: 0,
+        }}
+      >
+        M
+      </div>
+      <div className="sidebar-brand-text">
+        <strong>One Dashboard One Control</strong>
+        <span>CRM · Manado · SULUT</span>
+      </div>
+    </div>
+  );
+}
+
+function NavSectionList({
+  isItemActive,
+  onNavigate,
+}: {
+  isItemActive: (path: string, altPaths?: string[]) => boolean;
+  onNavigate: () => void;
+}) {
+  return (
+    <nav className="sidebar-nav">
+      {navItems.map((group) => (
+        <React.Fragment key={group.section}>
+          <div className="nav-section">{group.section}</div>
+          {group.items.map((item) => {
+            const active = isItemActive(item.path, item.altPaths);
+            return (
+              <Link
+                key={item.path}
+                href={item.path}
+                className={`tab-btn ${active ? 'active' : ''}`}
+                onClick={onNavigate}
+              >
+                <i className={`fas ${item.icon}`} aria-hidden="true" />
+                <span className="nav-label">{item.label}</span>
+              </Link>
+            );
+          })}
+        </React.Fragment>
+      ))}
+    </nav>
+  );
+}
+
+function HeaderBar({
+  title,
+  currentDate,
+  onToggleMenu,
+  onBack,
+}: {
+  title: string;
+  currentDate: string;
+  onToggleMenu: () => void;
+  onBack: () => void;
+}) {
+  return (
+    <header className="dash-header">
+      <div className="header-left">
+        <button
+          type="button"
+          className="menu-toggle"
+          onClick={onToggleMenu}
+          aria-label="Buka menu"
+        >
+          <i className="fas fa-bars" />
+        </button>
+        <button type="button" className="back-btn" onClick={onBack}>
+          <i className="fas fa-arrow-left" aria-hidden="true" /> Kembali
+        </button>
+        <div className="title-area">
+          <h1 className="page-title" id="pageTitle">
+            {title}
+          </h1>
+        </div>
+      </div>
+      <div className="date-badge" id="dashDate">
+        {currentDate}
+      </div>
+    </header>
+  );
+}
+
+function CrmModal({
+  modal,
+  onClose,
+}: {
+  modal: ModalState;
+  onClose: () => void;
+}) {
+  if (!modal.isOpen) return null;
+
+  return (
+    <div
+      className="modal-overlay show"
+      id="modalOverlay"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="modal-box">
+        <h2>
+          <span id="modalTitle">{modal.title}</span>
+          {modal.onDownloadCsv && (
+            <button
+              type="button"
+              className="btn-download"
+              id="modalDownloadBtn"
+              onClick={modal.onDownloadCsv}
+            >
+              <i className="fas fa-download" aria-hidden="true" /> Download CSV
+            </button>
+          )}
+          <button type="button" className="close-modal" onClick={onClose} aria-label="Tutup">
+            &times;
+          </button>
+        </h2>
+        <div id="modalBody">{modal.body}</div>
+      </div>
+    </div>
+  );
+}
+
 export function CrmShell({ title, crumb = 'Main', children }: CrmShellProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -121,51 +259,12 @@ export function CrmShell({ title, crumb = 'Main', children }: CrmShellProps) {
           />
 
           <aside className={`sidebar ${mobileNavOpen ? 'mobile-open' : ''}`} aria-label="Navigasi utama">
-            <div className="sidebar-brand">
-              <div
-                style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '6px',
-                  background: '#CC0000',
-                  color: '#FFFFFF',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 800,
-                  fontSize: '20px',
-                  flexShrink: 0,
-                }}
-              >
-                M
-              </div>
-              <div className="sidebar-brand-text">
-                <strong>One Dashboard One Control</strong>
-                <span>CRM · Manado · SULUT</span>
-              </div>
-            </div>
+            <SidebarBrand />
 
-            <nav className="sidebar-nav">
-              {navItems.map((group) => (
-                <React.Fragment key={group.section}>
-                  <div className="nav-section">{group.section}</div>
-                  {group.items.map((item) => {
-                    const active = isItemActive(item.path, item.altPaths);
-                    return (
-                      <Link
-                        key={item.path}
-                        href={item.path}
-                        className={`tab-btn ${active ? 'active' : ''}`}
-                        onClick={() => setMobileNavOpen(false)}
-                      >
-                        <i className={`fas ${item.icon}`} aria-hidden="true" />
-                        <span className="nav-label">{item.label}</span>
-                      </Link>
-                    );
-                  })}
-                </React.Fragment>
-              ))}
-            </nav>
+            <NavSectionList
+              isItemActive={isItemActive}
+              onNavigate={() => setMobileNavOpen(false)}
+            />
 
             <div className="sidebar-foot">
               <button
@@ -184,33 +283,12 @@ export function CrmShell({ title, crumb = 'Main', children }: CrmShellProps) {
           </aside>
 
           <div className="main-wrap">
-            <header className="dash-header">
-              <div className="header-left">
-                <button
-                  type="button"
-                  className="menu-toggle"
-                  onClick={() => setMobileNavOpen(!mobileNavOpen)}
-                  aria-label="Buka menu"
-                >
-                  <i className="fas fa-bars" />
-                </button>
-                <button
-                  type="button"
-                  className="back-btn"
-                  onClick={() => router.push('/')}
-                >
-                  <i className="fas fa-arrow-left" aria-hidden="true" /> Kembali
-                </button>
-                <div className="title-area">
-                  <h1 className="page-title" id="pageTitle">
-                    {title}
-                  </h1>
-                </div>
-              </div>
-              <div className="date-badge" id="dashDate">
-                {currentDate}
-              </div>
-            </header>
+            <HeaderBar
+              title={title}
+              currentDate={currentDate}
+              onToggleMenu={() => setMobileNavOpen(!mobileNavOpen)}
+              onBack={() => router.push('/')}
+            />
 
             <div className="dashboard-content">
               {children}
@@ -219,40 +297,7 @@ export function CrmShell({ title, crumb = 'Main', children }: CrmShellProps) {
         </div>
       </div>
 
-      {modal.isOpen && (
-        <div
-          className="modal-overlay show"
-          id="modalOverlay"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) closeModal();
-          }}
-        >
-          <div className="modal-box">
-            <h2>
-              <span id="modalTitle">{modal.title}</span>
-              {modal.onDownloadCsv && (
-                <button
-                  type="button"
-                  className="btn-download"
-                  id="modalDownloadBtn"
-                  onClick={modal.onDownloadCsv}
-                >
-                  <i className="fas fa-download" aria-hidden="true" /> Download CSV
-                </button>
-              )}
-              <button
-                type="button"
-                className="close-modal"
-                onClick={closeModal}
-                aria-label="Tutup"
-              >
-                &times;
-              </button>
-            </h2>
-            <div id="modalBody">{modal.body}</div>
-          </div>
-        </div>
-      )}
+      <CrmModal modal={modal} onClose={closeModal} />
     </ModalContext.Provider>
   );
 }

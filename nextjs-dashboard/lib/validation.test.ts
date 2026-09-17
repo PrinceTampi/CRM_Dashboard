@@ -1,0 +1,44 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+import { validateEventPayload, validateLcrPayload } from './validation.ts';
+
+test('validateEventPayload rejects invalid phone and short engine numbers', () => {
+  const invalid = validateEventPayload({
+    name: 'Test User',
+    phone: '12',
+    engine: 'abc',
+  });
+
+  assert.equal(invalid.ok, false);
+  assert.match(invalid.message ?? '', /Nomor HP|Nomor Mesin/i);
+
+  const valid = validateEventPayload({
+    name: 'Test User',
+    phone: '+62 812-3456-7890',
+    engine: 'MH1A1234567',
+    location: 'AHASS Kombos',
+  });
+
+  assert.equal(valid.ok, true);
+  assert.equal(valid.data?.phone, '081234567890');
+  assert.equal(valid.data?.engineNumber, 'MH1A1234567');
+});
+
+test('validateLcrPayload normalizes contact data and preserves required values', () => {
+  const result = validateLcrPayload({
+    name: '  Test  ',
+    phone: '0812-3456-7890',
+    nik: ' 3201010101010001 ',
+    motor: 'Beat Street',
+    district: 'Kombos',
+    status: 'Prospek',
+    contact: 'Terhubung',
+    result: 'Follow Up',
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.data?.name, 'Test');
+  assert.equal(result.data?.phone, '081234567890');
+  assert.equal(result.data?.nik, '3201010101010001');
+});

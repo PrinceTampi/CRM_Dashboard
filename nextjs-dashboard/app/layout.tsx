@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
+import { AppVersionNotifier } from '@/component/app-version-notifier';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -26,7 +27,10 @@ export default function RootLayout({
           href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <AppVersionNotifier />
+        {children}
+      </body>
     </html>
   );
 }

@@ -1,15 +1,94 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { CrmShell } from '@/component/layout/crm-shell';
-import { initialRepairOrders } from '@/lib/crm-data';
+
+type RepairOrderRow = {
+  no: number;
+  customer: string;
+  phone: string;
+  nik: string;
+  engine: string;
+  roNumber: string;
+  ahass: string;
+  date: string;
+  job: string;
+  status: string;
+  cost: number;
+};
+
+function StatSummaryCard({
+  icon,
+  value,
+  label,
+  tone,
+}: {
+  icon: string;
+  value: number;
+  label: string;
+  tone: 'blue' | 'green' | 'orange' | 'red';
+}) {
+  return (
+    <div className="stat-card stat-static">
+      <div className={`stat-icon ${tone}`}>
+        <i className={`fas ${icon}`} aria-hidden="true" />
+      </div>
+      <div className="stat-info">
+        <div className="number">{value}</div>
+        <div className="label">{label}</div>
+      </div>
+    </div>
+  );
+}
+
+function RoStatusBadge({ status }: { status: string }) {
+  const className = status === 'Sesuai' ? 'success' : status === 'Perlu Review' ? 'danger' : 'warning';
+
+  return <span className={`badge ${className}`}>{status}</span>;
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="detail-row">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
 
 export function PortalOverview() {
+  const [repairOrders, setRepairOrders] = useState<RepairOrderRow[]>([]);
   const [customerSearch, setCustomerSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('Semua');
-  const [selectedRO, setSelectedRO] = useState(initialRepairOrders[0]);
+  const [selectedRO, setSelectedRO] = useState<RepairOrderRow | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const filteredROs = initialRepairOrders.filter((ro) => {
+  useEffect(() => {
+    let active = true;
+
+    const load = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch('/api/repair-orders', { cache: 'no-store' });
+        const payload = await response.json();
+        if (!active) return;
+        setRepairOrders(payload.rows ?? []);
+        setSelectedRO((payload.rows ?? [])[0] ?? null);
+      } catch {
+        if (active) {
+          setRepairOrders([]);
+          setSelectedRO(null);
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    load();
+    return () => { active = false; };
+  }, []);
+
+  const filteredROs = repairOrders.filter((ro) => {
     const matchCust = !customerSearch || ro.customer.toLowerCase().includes(customerSearch.toLowerCase()) || ro.phone.includes(customerSearch) || ro.nik.includes(customerSearch) || ro.roNumber.toLowerCase().includes(customerSearch.toLowerCase());
     const matchStatus = statusFilter === 'Semua' || ro.status === statusFilter;
     return matchCust && matchStatus;
@@ -67,42 +146,10 @@ export function PortalOverview() {
         </div>
 
         <div className="stats-grid">
-          <div className="stat-card stat-static">
-            <div className="stat-icon blue">
-              <i className="fas fa-file-invoice" aria-hidden="true" />
-            </div>
-            <div className="stat-info">
-              <div className="number">{initialRepairOrders.length}</div>
-              <div className="label">Total R.O</div>
-            </div>
-          </div>
-          <div className="stat-card stat-static">
-            <div className="stat-icon green">
-              <i className="fas fa-check" aria-hidden="true" />
-            </div>
-            <div className="stat-info">
-              <div className="number">{initialRepairOrders.filter((r) => r.status === 'Sesuai').length}</div>
-              <div className="label">R.O Terverifikasi</div>
-            </div>
-          </div>
-          <div className="stat-card stat-static">
-            <div className="stat-icon orange">
-              <i className="fas fa-hourglass-half" aria-hidden="true" />
-            </div>
-            <div className="stat-info">
-              <div className="number">{initialRepairOrders.filter((r) => r.status === 'Belum Dicek').length}</div>
-              <div className="label">R.O Belum Dicek</div>
-            </div>
-          </div>
-          <div className="stat-card stat-static">
-            <div className="stat-icon red">
-              <i className="fas fa-triangle-exclamation" aria-hidden="true" />
-            </div>
-            <div className="stat-info">
-              <div className="number">{initialRepairOrders.filter((r) => r.status === 'Perlu Review').length}</div>
-              <div className="label">R.O Bermasalah / Review</div>
-            </div>
-          </div>
+          <StatSummaryCard icon="fa-file-invoice" value={repairOrders.length} label="Total R.O" tone="blue" />
+          <StatSummaryCard icon="fa-check" value={repairOrders.filter((r) => r.status === 'Sesuai').length} label="R.O Terverifikasi" tone="green" />
+          <StatSummaryCard icon="fa-hourglass-half" value={repairOrders.filter((r) => r.status === 'Belum Dicek').length} label="R.O Belum Dicek" tone="orange" />
+          <StatSummaryCard icon="fa-triangle-exclamation" value={repairOrders.filter((r) => r.status === 'Perlu Review').length} label="R.O Bermasalah / Review" tone="red" />
         </div>
 
         <div className="card">
@@ -127,7 +174,23 @@ export function PortalOverview() {
                 </tr>
               </thead>
               <tbody>
-                {filteredROs.map((ro) => (
+                {loading ? (
+                  <tr>
+                    <td colSpan={11} style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '18px' }}>
+                      Memuat data Repair Order...
+                    </td>
+                  </tr>
+                ) : filteredROs.length === 0 ? (
+                  <tr>
+                    <td colSpan={11}>
+                      <div className="empty-state">
+                        <i className="fas fa-clipboard" />
+                        <strong>Tidak ada data Repair Order yang cocok</strong>
+                        <p>Ubah kata kunci filter pencarian di atas untuk melihat data.</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : filteredROs.map((ro) => (
                   <tr
                     key={ro.no}
                     style={{
@@ -146,17 +209,7 @@ export function PortalOverview() {
                     <td>{ro.date}</td>
                     <td>{ro.job}</td>
                     <td>
-                      <span
-                        className={`badge ${
-                          ro.status === 'Sesuai'
-                            ? 'success'
-                            : ro.status === 'Perlu Review'
-                            ? 'danger'
-                            : 'warning'
-                        }`}
-                      >
-                        {ro.status}
-                      </span>
+                      <RoStatusBadge status={ro.status} />
                     </td>
                     <td>
                       <button
@@ -172,22 +225,11 @@ export function PortalOverview() {
                     </td>
                   </tr>
                 ))}
-                {filteredROs.length === 0 && (
-                  <tr>
-                    <td colSpan={11}>
-                      <div className="empty-state">
-                        <i className="fas fa-clipboard" />
-                        <strong>Tidak ada data Repair Order yang cocok</strong>
-                        <p>Ubah kata kunci filter pencarian di atas untuk melihat data.</p>
-                      </div>
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </div>
           <div className="pagination-controls" aria-hidden="true">
-            <span className="page-info">Menampilkan {filteredROs.length} dari {initialRepairOrders.length} R.O</span>
+            <span className="page-info">Menampilkan {filteredROs.length} dari {repairOrders.length} R.O</span>
           </div>
         </div>
 
@@ -196,18 +238,9 @@ export function PortalOverview() {
           <div className="detail-grid">
             <div className="detail-block">
               <h4>Customer Information</h4>
-              <div className="detail-row">
-                <span>Nama</span>
-                <strong>{selectedRO ? selectedRO.customer : '—'}</strong>
-              </div>
-              <div className="detail-row">
-                <span>No. HP</span>
-                <strong>{selectedRO ? selectedRO.phone : '—'}</strong>
-              </div>
-              <div className="detail-row">
-                <span>NIK</span>
-                <strong>{selectedRO ? selectedRO.nik : '—'}</strong>
-              </div>
+              <DetailRow label="Nama" value={selectedRO ? selectedRO.customer : '—'} />
+              <DetailRow label="No. HP" value={selectedRO ? selectedRO.phone : '—'} />
+              <DetailRow label="NIK" value={selectedRO ? selectedRO.nik : '—'} />
             </div>
             <div className="detail-block">
               <h4>Vehicle Information</h4>
