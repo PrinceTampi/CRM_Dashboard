@@ -87,7 +87,12 @@ export async function POST(request: NextRequest) {
   }
 
   const parsedRows = rows.slice(1).map((cells) => {
-    return Object.fromEntries(cells.map((cell, index) => [headers[index] ?? `column_${index}`, cell]));
+    return Object.fromEntries(
+      headers.map((header, index) => [
+        mappedHeaders[header.toLowerCase()] ?? header,
+        cells[index] ?? '',
+      ])
+    );
   });
 
   const normalized = parsedRows.map((row) => normalizeH1Row(row));

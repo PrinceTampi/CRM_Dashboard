@@ -2,6 +2,72 @@
 
 Semua perubahan penting pada project dicatat di sini. Setiap entri harus menyertakan perubahan yang dilakukan dan to-do yang masih tersisa.
 
+### 2026-09-18 - R.O otomatis dari histori upload H1
+
+Perubahan:
+
+- Mengganti sumber halaman Pengecekan R.O dari tabel Repair Order simulasi ke histori `H1Sale` dan `ImportRow`.
+- Menambahkan empat mode pencocokan: R.O by Nama, R.O by NIK, R.O by Nomor KK, dan R.O by Nomor Telepon.
+- Grup R.O hanya muncul jika identitas yang sama ditemukan minimal dua transaksi H1, termasuk lintas bulan/upload.
+- Menampilkan breakdown transaksi asal: tanggal faktur, file upload, dealer, nomor mesin, nomor rangka, dan jenis pembayaran.
+- Menambahkan alias header H1 untuk KK tanpa mengubah schema Prisma atau migration.
+- Menghapus filter lama Search Customer/No. R.O, No. HP, dan Status dari halaman tersebut.
+
+Validasi:
+
+- Typecheck fresh dengan `pnpm exec tsc --noEmit --incremental false` berhasil.
+- Test importer H1/H2/H3 berhasil dengan 7 testcase lolos.
+- Diagnostik API, komponen R.O, parser H1, dan CSS tidak menemukan error baru.
+
+### 2026-09-18 - Perbaikan seed akun demo dan validasi data
+
+Perubahan:
+
+- Memperbaiki script seed akun demo agar parameter `schema=public` pada `DATABASE_URL` tidak dikirim sebagai parameter konfigurasi PostgreSQL yang invalid.
+- Memastikan Prisma Client digenerate ulang dari schema terbaru.
+
+Validasi:
+
+- `pnpm exec prisma validate` berhasil.
+- `node --test lib/import/h1.test.ts lib/import/h23.test.ts` berhasil dengan 7 testcase lolos.
+- Typecheck fresh dengan `pnpm exec tsc --noEmit --incremental false` berhasil tanpa error.
+- Endpoint login `/api/auth/providers` dan `/api/auth/csrf` merespons HTTP 200.
+
+Catatan:
+
+- Jalankan `pnpm seed:users` sekali setelah database PostgreSQL aktif untuk membuat atau memperbarui akun demo.
+
+### 2026-09-18 - Perbaikan konfigurasi login lokal
+
+Perubahan:
+
+- Menambahkan fallback secret khusus development untuk mencegah error `MissingSecret` saat login lokal.
+- Memastikan environment production tetap harus menyediakan `AUTH_SECRET` atau `NEXTAUTH_SECRET` sendiri.
+- Regenerate Prisma client dari schema tanpa menjalankan migrasi atau mengubah data database.
+
+Validasi:
+
+- Endpoint `/api/auth/providers` dan `/api/auth/csrf` merespons HTTP 200 pada server lokal.
+
+### 2026-09-18 - Perbaikan import, monitoring, download, dan login
+
+Perubahan:
+
+- Memastikan header upload H1/H2/H3 dipetakan ke field kanonik sebelum normalisasi, sehingga variasi nama kolom tetap terbaca dan upsert mencegah duplikasi data.
+- Menambahkan daftar ulang tahun hari ini terpisah dari filter bulan pada Monitoring agar data H1 tidak tertutup oleh bulan yang sedang dipilih.
+- Merapikan tombol download dengan toolbar responsif yang konsisten di desktop dan mobile.
+- Memperbarui halaman login dengan tampilan portal perusahaan, informasi keamanan, dan form yang lebih jelas tanpa mengubah autentikasi.
+
+Validasi:
+
+- `node --test lib/import/h1.test.ts lib/import/h23.test.ts` berhasil dengan 7 testcase lolos.
+- Diagnostik file upload, monitoring, login, dan CSS tidak menemukan error baru.
+- `pnpm exec tsc --noEmit` masih menampilkan error Prisma client/generated typings yang sudah ada di banyak route lain.
+
+To-do:
+
+- Menyelaraskan Prisma client hasil generate dengan schema pada pekerjaan terpisah sebelum typecheck global dapat bersih.
+
 ### 2026-09-17 - Hardening backend dan validasi runtime
 
 Perubahan:

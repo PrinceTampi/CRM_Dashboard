@@ -60,12 +60,25 @@ function LoginForm() {
   }
 
   return (
-    <main className="page-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <section className="card" style={{ width: 'min(100% - 32px, 440px)' }}>
-        <div className="page-heading">
-          <h1>Masuk CRM</h1>
-          <p>Gunakan akun yang diberikan administrator.</p>
+    <main className="login-page">
+      <section className="login-shell">
+        <div className="login-brand-panel">
+          <div className="login-brand-mark"><i className="fas fa-chart-line" aria-hidden="true" /></div>
+          <span className="login-eyebrow">One Dashboard One Control</span>
+          <h1>Operasional CRM dalam satu kendali.</h1>
+          <p>Kelola pelanggan, penjualan, follow-up, dan performa dealer dengan data yang terhubung.</p>
+          <div className="login-trust-list">
+            <span><i className="fas fa-check-circle" aria-hidden="true" /> Data operasional terpusat</span>
+            <span><i className="fas fa-check-circle" aria-hidden="true" /> Akses berbasis peran</span>
+            <span><i className="fas fa-check-circle" aria-hidden="true" /> Monitoring yang siap digunakan</span>
+          </div>
         </div>
+        <div className="login-form-panel">
+          <div className="login-form-heading">
+            <span className="login-form-kicker">Portal perusahaan</span>
+            <h2>Selamat datang kembali</h2>
+            <p>Masuk menggunakan akun yang diberikan administrator.</p>
+          </div>
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label htmlFor="login-email">Email</label>
@@ -77,9 +90,12 @@ function LoginForm() {
           </div>
           {error && <div className="alert error">{error}</div>}
           <button type="submit" className="btn-submit" disabled={loading}>
-            {loading ? 'Memproses...' : 'Masuk'}
+            <i className={`fas ${loading ? 'fa-spinner fa-spin' : 'fa-arrow-right'}`} aria-hidden="true" />
+            {loading ? 'Memproses...' : 'Masuk ke Dashboard'}
           </button>
         </form>
+          <div className="login-form-footer"><i className="fas fa-shield-alt" aria-hidden="true" /> Akses aman untuk pengguna terdaftar</div>
+        </div>
       </section>
     </main>
   );
@@ -87,7 +103,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<main className="page-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}><section className="card" style={{ width: 'min(100% - 32px, 440px)' }}><div className="page-heading"><h1>Masuk CRM</h1><p>Memuat form login...</p></div></section></main>}>
+    <Suspense fallback={<main className="login-page"><section className="login-shell"><div className="login-form-panel"><div className="login-form-heading"><span className="login-form-kicker">Portal perusahaan</span><h2>Memuat login...</h2></div></div></section></main>}>
       <LoginForm />
     </Suspense>
   );

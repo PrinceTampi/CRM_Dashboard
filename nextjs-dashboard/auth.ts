@@ -8,6 +8,10 @@ const USER_ROLES = new Set(['ADMIN', 'AHASS'] as const);
 
 type UserRole = 'ADMIN' | 'AHASS';
 
+const authSecret = process.env.AUTH_SECRET
+  ?? process.env.NEXTAUTH_SECRET
+  ?? (process.env.NODE_ENV === 'production' ? undefined : 'crm-dashboard-local-development-secret');
+
 function isUserRole(value: unknown): value is UserRole {
   return typeof value === 'string' && USER_ROLES.has(value as UserRole);
 }
@@ -17,6 +21,7 @@ function normalizeUserRole(value: unknown): UserRole {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  secret: authSecret,
   pages: {
     signIn: '/login',
   },

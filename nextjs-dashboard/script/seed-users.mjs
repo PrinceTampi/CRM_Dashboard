@@ -3,7 +3,9 @@ import bcrypt from 'bcrypt';
 import postgres from 'postgres';
 import { randomUUID } from 'node:crypto';
 
-const sql = postgres(process.env.DATABASE_URL, { ssl: false });
+const databaseUrl = new URL(process.env.DATABASE_URL);
+databaseUrl.searchParams.delete('schema');
+const sql = postgres(databaseUrl.toString(), { ssl: false });
 
 const users = [
   {

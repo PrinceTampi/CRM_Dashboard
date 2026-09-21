@@ -87,7 +87,12 @@ export async function POST(request: NextRequest) {
   }
 
   const parsedRows = dataRows.map((row) => {
-    const normalized = Object.fromEntries((headerRow || []).map((header, index) => [header, row[index] ?? '']));
+    const normalized = Object.fromEntries(
+      (headerRow || []).map((header, index) => [
+        mappedHeaders[String(header ?? '').trim().toLowerCase()] ?? header,
+        row[index] ?? '',
+      ])
+    );
     return normalizeH23Row(normalized);
   });
 

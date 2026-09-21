@@ -137,6 +137,10 @@ export async function GET(request: NextRequest) {
       totalCustomers: customers.length,
       birthdayTodayCount,
       birthdayMonthCount,
+      birthdayTodayList: birthdayList.filter((customer) => {
+        const birthDate = new Date(customer.birth);
+        return birthDate.getMonth() === today.getMonth() && birthDate.getDate() === today.getDate();
+      }),
       birthdayList: birthdayList.filter((customer) => {
         const birthDate = new Date(customer.birth);
         return birthDate.getMonth() === monthDate.getMonth();
@@ -153,6 +157,7 @@ export async function GET(request: NextRequest) {
         totalCustomers: 0,
         birthdayTodayCount: 0,
         birthdayMonthCount: 0,
+        birthdayTodayList: [],
         birthdayList: [],
         eventList: [],
         monthlyRepairOrders: [],

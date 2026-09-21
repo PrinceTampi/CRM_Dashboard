@@ -42,6 +42,7 @@ type DashboardSummary = {
   totalCustomers: number;
   birthdayTodayCount: number;
   birthdayMonthCount: number;
+  birthdayTodayList: DashboardBirthday[];
   birthdayList: DashboardBirthday[];
   eventList: DashboardEvent[];
   monthlyRepairOrders: DashboardRepairOrder[];
@@ -49,17 +50,15 @@ type DashboardSummary = {
   salesTrend: Array<{ month: string; count: number }>;
 };
 
-const monthOptions = [
-  { value: '2026-08', label: 'Agustus 2026' },
-  { value: '2026-07', label: 'Juli 2026' },
-  { value: '2026-06', label: 'Juni 2026' },
-  { value: '2026-05', label: 'Mei 2026' },
-  { value: '2026-04', label: 'April 2026' },
-  { value: '2026-03', label: 'Maret 2026' },
-  { value: '2026-02', label: 'Februari 2026' },
-  { value: '2026-01', label: 'Januari 2026' },
-  { value: '2025-12', label: 'Desember 2025' },
-];
+const monthOptions = Array.from({ length: 12 }, (_, index) => {
+  const date = new Date();
+  date.setDate(1);
+  date.setMonth(date.getMonth() - index);
+  return {
+    value: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
+    label: new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric' }).format(date),
+  };
+});
 
 export function DashboardOverview() {
   const { openModal } = useCrmModal();
@@ -84,7 +83,7 @@ export function DashboardOverview() {
         const { data, error } = await safeFetchJson<DashboardSummary>(
           `/api/monitoring/summary?month=${encodeURIComponent(selectedMonth)}`,
           { cache: 'no-store' },
-          { totalCustomers: 0, birthdayTodayCount: 0, birthdayMonthCount: 0, birthdayList: [], eventList: [], monthlyRepairOrders: [], roByAhass: [], salesTrend: [] }
+          { totalCustomers: 0, birthdayTodayCount: 0, birthdayMonthCount: 0, birthdayTodayList: [], birthdayList: [], eventList: [], monthlyRepairOrders: [], roByAhass: [], salesTrend: [] }
         );
 
         if (!active) return;
@@ -97,6 +96,7 @@ export function DashboardOverview() {
           totalCustomers: 0,
           birthdayTodayCount: 0,
           birthdayMonthCount: 0,
+          birthdayTodayList: [],
           birthdayList: [],
           eventList: [],
           monthlyRepairOrders: [],
@@ -110,6 +110,7 @@ export function DashboardOverview() {
             totalCustomers: 0,
             birthdayTodayCount: 0,
             birthdayMonthCount: 0,
+            birthdayTodayList: [],
             birthdayList: [],
             eventList: [],
             monthlyRepairOrders: [],
@@ -132,6 +133,7 @@ export function DashboardOverview() {
   }, [selectedMonth]);
 
   const birthdayList = summary?.birthdayList ?? [];
+  const birthdayTodayList = summary?.birthdayTodayList ?? [];
   const totalMasterCount = summary?.totalCustomers ?? 0;
   const birthdayTodayCount = summary?.birthdayTodayCount ?? 0;
   const totalMonthBirthdays = summary?.birthdayMonthCount ?? 0;
@@ -233,7 +235,7 @@ export function DashboardOverview() {
               </tr>
             </thead>
             <tbody>
-              {birthdayList.slice(0, 10).map((c, i) => (
+              {birthdayTodayList.slice(0, 10).map((c, i) => (
                 <tr key={i}>
                   <td>{c.name}</td>
                   <td>{c.birth}</td>
@@ -431,14 +433,12 @@ export function DashboardOverview() {
           <div className="card">
             <h3>
               <i className="fas fa-gift" aria-hidden="true" />{' '}
-              <span id="birthdayTableTitle">Konsumen Berulang Tahun Bulan Ini</span>{' '}
-              <button
-                type="button"
-                className="btn-download"
-                onClick={handleDownloadBirthdayCsv}
-              >
-                <i className="fas fa-download" aria-hidden="true" /> Download CSV
-              </button>
+              <span id="birthdayTableTitle">Konsumen Berulang Tahun Bulan Ini</span>
+              <span className="card-heading-actions">
+                <button type="button" className="btn-download" onClick={handleDownloadBirthdayCsv}>
+                  <i className="fas fa-download" aria-hidden="true" /> Download CSV
+                </button>
+              </span>
             </h3>
             <div className="table-wrap">
               <table>
@@ -607,14 +607,12 @@ export function DashboardOverview() {
 
         <div className="card">
           <h3>
-            <i className="fas fa-list-ul" aria-hidden="true" /> Seluruh Data Event Masuk{' '}
-            <button
-              type="button"
-              className="btn-download"
-              onClick={handleDownloadEventCsv}
-            >
-              <i className="fas fa-download" aria-hidden="true" /> Download CSV
-            </button>
+            <i className="fas fa-list-ul" aria-hidden="true" /> Seluruh Data Event Masuk
+            <span className="card-heading-actions">
+              <button type="button" className="btn-download" onClick={handleDownloadEventCsv}>
+                <i className="fas fa-download" aria-hidden="true" /> Download CSV
+              </button>
+            </span>
           </h3>
           <div className="table-wrap">
             <table>
