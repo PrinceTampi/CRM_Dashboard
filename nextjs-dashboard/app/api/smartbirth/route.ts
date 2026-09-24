@@ -17,6 +17,10 @@ function monthKeyFromDate(date: Date): string {
   return `${year}-${month}`;
 }
 
+function monthNumberFromDate(date: Date): number {
+  return date.getMonth() + 1;
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -28,9 +32,13 @@ export async function GET(request: Request) {
       prisma.customer.findMany({
         where: { birthDate: { not: null } },
         select: {
+          id: true,
           name: true,
           birthDate: true,
           phone: true,
+          h1Sales: {
+            select: { id: true },
+          },
         },
       }),
       prisma.birthdayFollowUp.findMany({
@@ -39,20 +47,36 @@ export async function GET(request: Request) {
       }),
     ]);
 
+    const monthFollowUps = followUps
+      .filter((item) => item.followUpDate)
+      .filter((item) => monthKeyFromDate(new Date(item.followUpDate)) === selectedMonth);
+
+    const followUpByCustomer = new Map<string, typeof monthFollowUps[number]>();
+    for (const item of monthFollowUps) {
+      if (!followUpByCustomer.has(item.customerId)) followUpByCustomer.set(item.customerId, item);
+    }
+
+    const selectedMonthNumber = month || 1;
     const birthdayCustomers = customers
       .filter((customer) => customer.birthDate)
       .map((customer) => ({
+        id: customer.id,
         name: customer.name,
         birth: formatDateOnly(customer.birthDate),
         phone: customer.phone ?? '',
+        h1SalesCount: customer.h1Sales.length,
+        followUp: followUpByCustomer.get(customer.id)
+          ? {
+            contact: followUpByCustomer.get(customer.id)?.contactStatus ?? 'Belum ada status',
+            deal: followUpByCustomer.get(customer.id)?.dealStatus ?? 'Belum ada deal',
+          }
+          : null,
       }))
       .filter((customer) => customer.birth)
-      .filter((customer) => monthKeyFromDate(new Date(customer.birth)) === selectedMonth)
+      .filter((customer) => monthNumberFromDate(new Date(customer.birth)) === selectedMonthNumber)
       .sort((a, b) => a.birth.localeCompare(b.birth));
 
-    const followUpList = followUps
-      .filter((item) => item.followUpDate)
-      .filter((item) => monthKeyFromDate(new Date(item.followUpDate)) === selectedMonth)
+    const followUpList = monthFollowUps
       .map((item) => ({
         name: item.customer?.name ?? 'Customer tidak diketahui',
         phone: item.customer?.phone ?? '',

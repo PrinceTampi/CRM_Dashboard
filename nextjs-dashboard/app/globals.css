@@ -109,8 +109,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 .toast-stack {
   position: fixed;
-  top: 76px;
   right: 20px;
+  bottom: 20px;
   z-index: 2000;
   display: flex;
   flex-direction: column;
@@ -132,12 +132,15 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   font-size: var(--fs-md);
   line-height: 1.45;
   pointer-events: auto;
-  animation: toast-in 0.2s ease-out;
+  animation: toast-in 0.25s ease-out;
 }
 
 .toast > i { margin-top: 2px; }
-.toast span { flex: 1; }
-.toast button { border: 0; background: transparent; color: var(--text-muted); cursor: pointer; padding: 0 2px; }
+.toast-content { display: grid; flex: 1; gap: 3px; min-width: 0; }
+.toast-content strong { color: inherit; font-size: 12px; }
+.toast-content span { color: var(--text); overflow-wrap: anywhere; }
+.toast button { border: 0; background: transparent; color: var(--text-muted); cursor: pointer; padding: 2px 4px; border-radius: 4px; }
+.toast button:hover, .toast button:focus-visible { background: rgba(0,0,0,.08); color: var(--text); outline: none; }
 .toast-success { color: var(--success); background: var(--success-bg); }
 .toast-error { color: var(--danger); background: var(--danger-bg); }
 .toast-warning { color: var(--warning); background: var(--warning-bg); }
@@ -166,12 +169,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .upload-progress-hint { margin-top: 8px; color: #15803D; font-size: 12px; }
 
 @keyframes toast-in {
-  from { opacity: 0; transform: translateY(-8px); }
+  from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 @media (max-width: 640px) {
-  .toast-stack { top: 12px; right: 16px; left: 16px; width: auto; }
+  .toast-stack { right: 16px; bottom: 16px; left: 16px; width: auto; }
 }
 
 /* ========== LANDING ========== */
@@ -624,6 +627,21 @@ tr:last-child td { border-bottom: none; }
 .niguri-table .value-cell { text-align: right; font-weight: 600; color: var(--navy); font-variant-numeric: tabular-nums; }
 .niguri-table .pct-cell { text-align: right; font-weight: 600; color: var(--text-secondary); font-size: 12px; }
 .niguri-table .highlight { background: #FAFBFC; }
+
+.niguri-format-card { overflow: hidden; }
+.spreadsheet-scroll { overflow-x: auto; padding-bottom: 4px; }
+.niguri-spreadsheet { width: max-content; min-width: 100%; border-collapse: collapse; table-layout: fixed; color: #000; font-family: Calibri, Arial, sans-serif; font-size: 11px; }
+.niguri-spreadsheet col { width: 54px; }
+.niguri-spreadsheet td { min-width: 54px; height: 24px; padding: 3px 5px; border: 1px solid #7F7F7F; background: #FFF; text-align: center; vertical-align: middle; white-space: pre-line; line-height: 1.15; }
+.niguri-spreadsheet td.row-label { width: 150px; min-width: 150px; background: #FFF2CC; text-align: left; font-weight: 700; }
+.niguri-spreadsheet td.section-label, .niguri-spreadsheet td.group-title, .niguri-spreadsheet td.month-title, .niguri-spreadsheet td.year-title { background: #1F4E78; color: #FFF; font-weight: 700; }
+.niguri-spreadsheet td.section-label { text-align: left; }
+.niguri-spreadsheet td.group-title, .niguri-spreadsheet td.month-title, .niguri-spreadsheet td.year-title { text-align: center; }
+.niguri-h1-sheet td { min-width: 48px; }
+.niguri-h1-sheet td.row-label { min-width: 190px; }
+.niguri-h3-sheet td { min-width: 42px; }
+.niguri-h3-sheet td.row-label { min-width: 220px; }
+.niguri-h3-sheet tr:nth-child(n + 4) td:not(.row-label) { color: #404040; }
 
 .pagination-controls {
   display: flex; align-items: center; justify-content: center; gap: 12px; padding: 12px 0 4px;

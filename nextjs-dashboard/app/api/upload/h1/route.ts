@@ -292,11 +292,13 @@ export async function POST(request: NextRequest) {
     batchId: batch.id,
     headerMap: mappedHeaders,
     preview: normalized,
+    totalRows: normalized.length,
     importedRows: importedSales,
     importedCustomers,
     updatedCustomers,
     updatedSales,
     duplicateRows,
+    warningRows: warningCount,
     warnings: warningCount,
     message: `Data H1 berhasil diproses: ${importedSales} penjualan, ${updatedSales} diperbarui, ${warningCount} warning.`,
   });

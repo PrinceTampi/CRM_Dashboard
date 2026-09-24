@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { CrmShell } from '@/component/layout/crm-shell';
+import { CrmShell, useCrmToast } from '@/component/layout/crm-shell';
 import { downloadCsvFile } from '@/lib/crm-data';
 
 type LcrRecord = {
@@ -67,6 +67,7 @@ function LcrStatCard({
 }
 
 export function LcrView() {
+  const { showToast } = useCrmToast();
   const [records, setRecords] = useState<LcrRecord[]>([]);
   const [motor, setMotor] = useState('Semua');
   const [district, setDistrict] = useState('Semua');
@@ -86,8 +87,11 @@ export function LcrView() {
         const payload = await response.json();
         if (!active) return;
         setRecords(payload.records ?? []);
-      } catch {
-        if (active) setRecords([]);
+      } catch (error) {
+        if (active) {
+          setRecords([]);
+          showToast('error', error instanceof Error ? error.message : 'Data LCR gagal dimuat.');
+        }
       } finally {
         if (active) setLoading(false);
       }
@@ -129,13 +133,23 @@ export function LcrView() {
       setRecords((current) => [payload.record, ...current]);
       setForm({ name: '', phone: '', nik: '', motor: '', district: '', status: 'Prospek', contact: 'Belum di-FU', result: 'Belum ada hasil' });
       setShowForm(false);
+      showToast('success', 'Hasil FU LCR berhasil disimpan.');
     } catch (error) {
       console.error(error);
+      showToast('error', error instanceof Error ? error.message : 'Gagal menyimpan data LCR.');
     } finally {
       setIsSubmitting(false);
     }
   };
-  const download = () => downloadCsvFile('Hasil_FU_LCR.csv', ['Nama', 'No HP', 'NIK', 'Tipe Motor', 'Kecamatan', 'Status', 'Kontak', 'Hasil FU', 'Tanggal'], filtered.map((row) => [row.name, row.phone, row.nik, row.motor, row.district, row.status, row.contact, row.result, row.date]));
+  const download = () => {
+    if (filtered.length === 0) {
+      showToast('warning', 'Tidak ada data LCR untuk diunduh pada filter ini.');
+      return;
+    }
+
+    downloadCsvFile('Hasil_FU_LCR.csv', ['Nama', 'No HP', 'NIK', 'Tipe Motor', 'Kecamatan', 'Status', 'Kontak', 'Hasil FU', 'Tanggal'], filtered.map((row) => [row.name, row.phone, row.nik, row.motor, row.district, row.status, row.contact, row.result, row.date]));
+    showToast('success', `${filtered.length} data LCR berhasil diunduh.`);
+  };
 
   return (
     <CrmShell title="LCR" crumb="Admin & Follow-up">

@@ -5,9 +5,12 @@ import { CrmShell } from '@/component/layout/crm-shell';
 import { downloadCsvFile } from '@/lib/crm-data';
 
 type BirthdayCustomer = {
+  id: string;
   name: string;
   birth: string;
   phone: string;
+  h1SalesCount: number;
+  followUp: { contact: string; deal: string } | null;
 };
 
 type BirthdayFollowUp = {
@@ -127,18 +130,17 @@ export function SmartBirthView() {
   }, [selectedMonth]);
 
   const totalBirthday = birthdayCustomers.length;
-  const buyersCount = 0;
+  const buyersCount = birthdayCustomers.filter((customer) => customer.followUp?.deal.toLowerCase() === 'deal').length;
   const convRate = totalBirthday > 0 ? ((buyersCount / totalBirthday) * 100).toFixed(1) : '0';
   const salesContribution = '—';
 
   const birthdayPurchasers = useMemo(() => {
-    return birthdayCustomers.slice(0, 100).map((c, i) => {
-      const usesPromo = i % 4 === 0;
-      const spend = usesPromo ? 17500000 + (i % 5) * 1500000 : 0;
+    return birthdayCustomers.slice(0, 100).map((c) => {
+      const usesPromo = c.followUp?.deal.toLowerCase() === 'deal';
       return {
         ...c,
         usesPromo: usesPromo ? 'Ya' : 'Tidak',
-        spend,
+        spend: 0,
       };
     });
   }, [birthdayCustomers]);
@@ -158,8 +160,8 @@ export function SmartBirthView() {
   const handleDownloadSmartBirthCsv = () => {
     downloadCsvFile(
       `Pembelian_Konsumen_Ultah_${selectedMonth}.csv`,
-      ['Nama', 'Tanggal Lahir', 'No HP', 'Menggunakan Promo', 'Total Belanja (Rp)'],
-      birthdayPurchasers.map((p) => [p.name, p.birth, p.phone, p.usesPromo, p.spend])
+      ['Nama', 'Tanggal Lahir', 'No HP', 'Menggunakan Promo', 'Referensi H1'],
+      birthdayPurchasers.map((p) => [p.name, p.birth, p.phone, p.usesPromo, p.h1SalesCount])
     );
   };
 
@@ -214,7 +216,7 @@ export function SmartBirthView() {
 
         <div className="card" style={{ marginTop: '16px' }}>
           <h3>
-            <i className="fas fa-table" aria-hidden="true" /> Detail Pembelian Konsumen Ulang Tahun{' '}
+            <i className="fas fa-table" aria-hidden="true" /> Detail FU dan Referensi H1 Konsumen Ulang Tahun{' '}
             <SectionAction label="Download CSV" onClick={handleDownloadSmartBirthCsv} />
           </h3>
           <div className="table-wrap">
@@ -225,7 +227,7 @@ export function SmartBirthView() {
                   <th>Tanggal Lahir</th>
                   <th>No HP</th>
                   <th>Menggunakan Promo</th>
-                  <th>Total Belanja (Rp)</th>
+                  <th>Referensi H1</th>
                 </tr>
               </thead>
               <tbody id="smartBirthTableBody">
@@ -246,7 +248,7 @@ export function SmartBirthView() {
                       </span>
                     </td>
                     <td>
-                      {p.spend > 0 ? `Rp ${p.spend.toLocaleString('id-ID')}` : '—'}
+                      {p.h1SalesCount > 0 ? `${p.h1SalesCount} transaksi H1` : 'Belum ada transaksi H1'}
                     </td>
                   </tr>
                 ))}

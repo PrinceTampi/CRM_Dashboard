@@ -13,16 +13,43 @@ function formatDateOnly(value: Date | string | null | undefined): string {
 }
 
 export async function GET() {
-  const followUps = await prisma.lcrFollowUp.findMany({
+  const [campaigns, followUps] = await Promise.all([prisma.lcrCampaignRecord.findMany({
+    include: { vehicle: { include: { customer: true } }, dealer: true },
+    orderBy: { vehicleId: 'asc' },
+  }), prisma.lcrFollowUp.findMany({
     include: {
       customer: { include: { vehicles: true } },
       dealer: true,
     },
     orderBy: { followUpDate: 'desc' },
+  })]);
+
+  const latestFollowUp = new Map<string, typeof followUps[number]>();
+  for (const item of followUps) {
+    if (!latestFollowUp.has(item.customerId)) latestFollowUp.set(item.customerId, item);
+  }
+
+  const campaignRecords = campaigns.map((item) => {
+    const customer = item.vehicle.customer;
+    const followUp = latestFollowUp.get(customer.id);
+    return {
+      id: item.id,
+      name: customer.name,
+      phone: customer.phone ?? '',
+      nik: customer.nik ?? '',
+      motor: item.vehicle.model ?? 'Belum ada',
+      district: item.dealer.name,
+      status: item.isTreated ? 'Sudah LCR' : followUp?.status ?? 'Belum di-FU',
+      contact: followUp?.contactStatus ?? 'Belum di-FU',
+      result: followUp?.result ?? item.treatmentStatus ?? 'Belum ada hasil',
+      date: formatDateOnly(followUp?.followUpDate ?? customer.createdAt),
+    };
   });
 
   return NextResponse.json({
-    records: followUps.map((item) => ({
+    records: [
+      ...campaignRecords,
+      ...followUps.filter((item) => !campaigns.some((campaign) => campaign.vehicle.customerId === item.customerId)).map((item) => ({
       id: item.id,
       name: item.customer?.name ?? 'Customer tidak diketahui',
       phone: item.customer?.phone ?? '',
@@ -33,7 +60,8 @@ export async function GET() {
       contact: item.contactStatus ?? 'Belum di-FU',
       result: item.result ?? 'Belum ada hasil',
       date: formatDateOnly(item.followUpDate),
-    })),
+      })),
+    ],
   });
 }
 

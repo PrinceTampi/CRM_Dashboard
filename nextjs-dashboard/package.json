@@ -7,7 +7,7 @@
     "dev": "next dev",
     "start": "next start",
     "seed:users": "node script/seed-users.mjs",
-    "postinstall": "prisma skills sync || exit 0"
+    "postinstall": "prisma generate --no-hints"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",

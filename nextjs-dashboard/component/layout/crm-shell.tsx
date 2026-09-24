@@ -85,16 +85,26 @@ const ToastContext = createContext<{
 export const useCrmToast = () => useContext(ToastContext);
 
 function ToastStack({ toasts, onClose }: { toasts: Toast[]; onClose: (id: number) => void }) {
+  const toastTitles: Record<ToastType, string> = {
+    success: 'Berhasil',
+    error: 'Terjadi kesalahan',
+    warning: 'Perlu diperhatikan',
+    info: 'Informasi',
+  };
+
   return (
-    <div className="toast-stack" aria-live="polite" aria-atomic="false">
+    <div className="toast-stack" aria-live="polite" aria-atomic="false" aria-label="Notifikasi sistem">
       {toasts.map((toast) => (
-        <div key={toast.id} className={`toast toast-${toast.type}`} role={toast.type === 'error' ? 'alert' : 'status'}>
+        <div key={toast.id} className={`toast toast-${toast.type}`} role={toast.type === 'error' || toast.type === 'warning' ? 'alert' : 'status'}>
           <i
             className={`fas ${toast.type === 'success' ? 'fa-circle-check' : toast.type === 'error' ? 'fa-circle-exclamation' : toast.type === 'warning' ? 'fa-triangle-exclamation' : 'fa-circle-info'}`}
             aria-hidden="true"
           />
-          <span>{toast.message}</span>
-          <button type="button" onClick={() => onClose(toast.id)} aria-label="Tutup notifikasi">
+          <div className="toast-content">
+            <strong>{toastTitles[toast.type]}</strong>
+            <span>{toast.message}</span>
+          </div>
+          <button type="button" onClick={() => onClose(toast.id)} aria-label="Tutup notifikasi" title="Tutup notifikasi">
             <i className="fas fa-xmark" aria-hidden="true" />
           </button>
         </div>
@@ -273,6 +283,23 @@ export function CrmShell({ title, crumb = 'Main', children }: CrmShellProps) {
     setCurrentDate(`${dayName}, ${dateNum} ${monthName} ${year}`);
   }, []);
 
+  useEffect(() => {
+    const handleWindowError = (event: ErrorEvent) => {
+      showToast('error', event.message || 'Terjadi kesalahan pada halaman.');
+    };
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason instanceof Error ? event.reason.message : String(event.reason || 'Proses tidak dapat diselesaikan.');
+      showToast('error', reason);
+    };
+
+    window.addEventListener('error', handleWindowError);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+    return () => {
+      window.removeEventListener('error', handleWindowError);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
+  }, []);
+
   const openModal = (title: string, body: React.ReactNode, onDownloadCsv?: () => void) => {
     setModal({
       isOpen: true,
@@ -289,9 +316,10 @@ export function CrmShell({ title, crumb = 'Main', children }: CrmShellProps) {
   const showToast = (type: ToastType, message: string) => {
     const id = Date.now() + Math.random();
     setToasts((current) => [...current, { id, type, message }].slice(-4));
+    const duration = type === 'error' ? 8000 : type === 'warning' ? 6500 : type === 'info' ? 5000 : 4500;
     window.setTimeout(() => {
       setToasts((current) => current.filter((toast) => toast.id !== id));
-    }, 5000);
+    }, duration);
   };
 
   const closeToast = (id: number) => {

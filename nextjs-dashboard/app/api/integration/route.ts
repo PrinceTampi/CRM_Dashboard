@@ -13,52 +13,39 @@ function formatDateOnly(value: Date | string | null | undefined): string {
 
 export async function GET() {
   try {
-    const [events, sales, customers] = await Promise.all([
-      prisma.eventRegistration.findMany({
-        orderBy: { eventDate: 'desc' },
-        take: 25,
-        include: { customer: true },
-      }),
-      prisma.h1Sale.findMany({
-        orderBy: { invoiceDate: 'desc' },
-        take: 25,
-        include: { customer: true, vehicle: true },
-      }),
-      prisma.customer.findMany({
-        orderBy: { createdAt: 'desc' },
-        take: 25,
-        include: { vehicles: true },
-      }),
-    ]);
+    const customers = await prisma.customer.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        vehicles: true,
+        h1Sales: { orderBy: { invoiceDate: 'desc' }, take: 1 },
+        eventRegistrations: { orderBy: { eventDate: 'desc' }, take: 1 },
+      },
+    });
 
-    const rows = [
-      ...events.map((event) => ({
-        name: event.customer?.name ?? 'Customer tidak diketahui',
-        phone: event.customer?.phone ?? '',
-        engine: event.engineNumber ?? '',
-        source: 'AHASS Event',
-        date: formatDateOnly(event.eventDate),
-      })),
-      ...sales.map((sale) => ({
-        name: sale.customer?.name ?? 'Customer tidak diketahui',
-        phone: sale.customer?.phone ?? '',
-        engine: sale.vehicle?.engineNumber ?? '',
-        source: 'H1 Penjualan',
-        date: formatDateOnly(sale.invoiceDate),
-      })),
-      ...customers.map((customer) => ({
+    const rows = customers.map((customer) => {
+      const latestSale = customer.h1Sales[0];
+      const latestEvent = customer.eventRegistrations[0];
+      const latestDate = latestSale?.invoiceDate ?? latestEvent?.eventDate ?? customer.createdAt;
+
+      return {
         name: customer.name,
         phone: customer.phone ?? '',
-        engine: customer.vehicles?.[0]?.engineNumber ?? '',
-        source: 'Master Customer',
-        date: formatDateOnly(customer.createdAt),
-      })),
-    ]
-      .filter((row) => row.name && row.phone)
-      .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
-      .slice(0, 120);
+        engine: customer.vehicles[0]?.engineNumber ?? latestEvent?.engineNumber ?? '',
+        source: latestSale ? 'H1 Penjualan' : latestEvent ? 'AHASS Event' : 'Master Customer',
+        date: formatDateOnly(latestDate),
+      };
+    });
 
-    return NextResponse.json({ rows });
+    const completeCustomers = rows.filter((row) => row.name && row.phone && row.engine).length;
+
+    return NextResponse.json({
+      rows,
+      summary: {
+        totalCustomers: rows.length,
+        completeCustomers,
+        incompleteCustomers: rows.length - completeCustomers,
+      },
+    });
   } catch (error) {
     console.error('Failed to load integrated customer data', error);
     return NextResponse.json({ rows: [] }, { status: 200 });

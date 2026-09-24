@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { CrmShell, useCrmModal } from '@/component/layout/crm-shell';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { CrmShell, useCrmModal, useCrmToast } from '@/component/layout/crm-shell';
 import {
   calculateAge,
   getBirthdayStatus,
@@ -62,6 +62,8 @@ const monthOptions = Array.from({ length: 12 }, (_, index) => {
 
 export function DashboardOverview() {
   const { openModal } = useCrmModal();
+  const { showToast } = useCrmToast();
+  const hasLoadedMonitoring = useRef(false);
 
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
@@ -103,9 +105,15 @@ export function DashboardOverview() {
           roByAhass: [],
           salesTrend: [],
         });
+        if (hasLoadedMonitoring.current) {
+          showToast('success', `Monitoring periode ${selectedMonth} berhasil dimuat.`);
+        }
+        hasLoadedMonitoring.current = true;
       } catch (error) {
         if (active) {
-          console.error('Monitoring summary load error:', getClientErrorMessage(error));
+          const message = getClientErrorMessage(error, 'Data monitoring gagal dimuat.');
+          console.error('Monitoring summary load error:', message);
+          showToast('error', message);
           setSummary({
             totalCustomers: 0,
             birthdayTodayCount: 0,
@@ -141,7 +149,6 @@ export function DashboardOverview() {
   const eventCount = eventList.length;
   const monthlyRepairOrders = summary?.monthlyRepairOrders ?? [];
   const roByAhass = summary?.roByAhass ?? [];
-  const salesMonthly = summary?.salesTrend ?? [];
 
   // Pagination for birthday table
   const totalBdayPages = Math.max(1, Math.ceil(birthdayList.length / pageSize));
@@ -160,6 +167,11 @@ export function DashboardOverview() {
   const recentEvents = eventList.slice(-3).reverse();
 
   const handleDownloadBirthdayCsv = () => {
+    if (birthdayList.length === 0) {
+      showToast('warning', 'Tidak ada data ulang tahun untuk diunduh pada periode ini.');
+      return;
+    }
+
     downloadCsvFile(
       `Konsumen_Ultah_${selectedMonth}.csv`,
       ['Nama', 'Tanggal Lahir', 'No HP', 'Usia', 'Status'],
@@ -171,9 +183,15 @@ export function DashboardOverview() {
         getBirthdayStatus(c.birth),
       ])
     );
+    showToast('success', `${birthdayList.length} data ulang tahun berhasil diunduh.`);
   };
 
   const handleDownloadEventCsv = () => {
+    if (eventList.length === 0) {
+      showToast('warning', 'Tidak ada data event untuk diunduh.');
+      return;
+    }
+
     downloadCsvFile(
       'Seluruh_Data_Event.csv',
       ['Nama', 'No HP', 'No Mesin', 'Lokasi', 'Catatan', 'Tanggal Input'],
@@ -186,6 +204,21 @@ export function DashboardOverview() {
         e.date,
       ])
     );
+    showToast('success', `${eventList.length} data event berhasil diunduh.`);
+  };
+
+  const handleDownloadMasterCsv = () => {
+    if (birthdayList.length === 0) {
+      showToast('warning', 'Tidak ada data master konsumen untuk diunduh.');
+      return;
+    }
+
+    downloadCsvFile(
+      'Master_Konsumen.csv',
+      ['Nama', 'Tanggal Lahir', 'No HP'],
+      birthdayList.map((c) => [c.name, c.birth, c.phone])
+    );
+    showToast('success', `${birthdayList.length} data master konsumen berhasil diunduh.`);
   };
 
   const openCardModal = (type: 'total' | 'today' | 'month' | 'event') => {
@@ -215,12 +248,7 @@ export function DashboardOverview() {
             Menampilkan data master konsumen CRM ({totalMasterCount.toLocaleString('id-ID')} data terdaftar).
           </p>
         </div>,
-        () =>
-          downloadCsvFile(
-            'Master_Konsumen.csv',
-            ['Nama', 'Tanggal Lahir', 'No HP'],
-            birthdayList.map((c) => [c.name, c.birth, c.phone])
-          )
+        handleDownloadMasterCsv
       );
     } else if (type === 'today') {
       openModal(
@@ -303,8 +331,6 @@ export function DashboardOverview() {
       );
     }
   };
-
-  const maxSales = Math.max(0, ...salesMonthly.map((s) => s.count));
 
   return (
     <CrmShell title="Monitoring" crumb="Main">
@@ -537,46 +563,6 @@ export function DashboardOverview() {
           </div>
 
           <div className="card">
-            <h3>
-              <i className="fas fa-chart-bar" aria-hidden="true" /> Penjualan per Bulan
-            </h3>
-            <div className="chart-container" style={{ height: '180px', display: 'flex', alignItems: 'flex-end', gap: '8px', padding: '12px 4px' }}>
-              {salesMonthly.map((item) => {
-                const heightPct = Math.round((item.count / maxSales) * 100);
-                return (
-                  <div
-                    key={item.month}
-                    style={{
-                      flex: 1,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: '6px',
-                      height: '100%',
-                      justifyContent: 'flex-end',
-                    }}
-                  >
-                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--navy)' }}>
-                      {item.count}
-                    </span>
-                    <div
-                      style={{
-                        width: '100%',
-                        maxWidth: '32px',
-                        height: `${heightPct}%`,
-                        backgroundColor: '#CC0000',
-                        borderRadius: '4px 4px 0 0',
-                        transition: 'height 0.3s ease',
-                      }}
-                    />
-                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                      {item.month}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-
             <div style={{ marginTop: '16px' }}>
               <h3>
                 <i className="fas fa-clock" aria-hidden="true" /> Event Terakhir

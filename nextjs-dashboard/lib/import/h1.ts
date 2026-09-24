@@ -72,6 +72,14 @@ function normalizeMachineId(value: string | number | null | undefined): string |
   return text.replace(/\s+/g, '').replace(/[^A-Za-z0-9]/g, '');
 }
 
+function normalizeNik(value: string | number | null | undefined): string | null {
+  const text = normalizeText(value);
+  if (!text) return null;
+
+  const digits = text.replace(/\D+/g, '');
+  return digits.length === 16 ? digits : null;
+}
+
 function parseDateValue(value: string | number | null | undefined): Date | null {
   const text = normalizeText(value);
   if (!text) return null;
@@ -128,7 +136,7 @@ export function normalizeH1Row(row: H1SourceRow): NormalizedH1Row {
     kode_dealer: normalizeText(row.kode_dealer),
     tanggal_faktur: parseDateValue(row.tanggal_faktur),
     nama_konsumen: normalizeText(row.nama_konsumen),
-    no_ktp: normalizeText(row.no_ktp)?.replace(/\D+/g, '') || null,
+    no_ktp: normalizeNik(row.no_ktp),
     tanggal_lahir: parseDateValue(row.tanggal_lahir),
     no_hp: normalizePhone(row.no_hp ?? row['no hp'] ?? row['No HP']),
     no_telp: normalizePhone(row.no_telp ?? row['no telp'] ?? row['No Telp']),

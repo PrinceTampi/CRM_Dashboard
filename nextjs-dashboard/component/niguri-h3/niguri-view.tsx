@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { CrmShell } from '@/component/layout/crm-shell';
+import { CrmShell, useCrmToast } from '@/component/layout/crm-shell';
 import { downloadCsvFile } from '@/lib/crm-data';
 import type { H3ActivateRecord } from '@/lib/definitions';
 
@@ -69,6 +69,7 @@ function PaginationControls({
 }
 
 export function NiguriView() {
+  const { showToast } = useCrmToast();
   const [selectedMonth, setSelectedMonth] = useState('2026-08');
   const [page, setPage] = useState(1);
   const [actList, setActList] = useState<H3ActivateRecord[]>([]);
@@ -130,13 +131,40 @@ export function NiguriView() {
     downloadCsvFile(
       `Report_H3_Activation_${selectedMonth}.csv`,
       ['Nama', 'No HP', 'Status Contact', 'Status Deal', 'Tanggal Upload'],
-      actList.map((a, i) => [
+      actList.map((a) => [
         a.name,
         a.phone,
         a.contact,
-        i % 2 === 0 ? 'Deal' : 'Follow Up',
+        a.deal ?? '',
         a.date,
       ])
+    );
+  };
+
+  const copySpreadsheet = async (headers: string[], rows: (string | number)[][]) => {
+    const spreadsheetText = [headers, ...rows]
+      .map((row) => row.map((value) => String(value ?? '').replace(/[\t\r\n]+/g, ' ')).join('\t'))
+      .join('\n');
+
+    try {
+      await navigator.clipboard.writeText(spreadsheetText);
+      showToast('success', 'Data berhasil disalin. Silakan paste ke spreadsheet.');
+    } catch {
+      showToast('error', 'Data gagal disalin ke clipboard.');
+    }
+  };
+
+  const handleCopyMatrix = () => {
+    void copySpreadsheet(
+      ['Metric', 'H1 to H3 Qty', 'H1 to H3 %', 'H2 to H3 Qty', 'H2 to H3 %'],
+      matrixRows.map((r) => [r.metric, r.h1_qty, r.h1_pct, r.h2_qty, r.h2_pct])
+    );
+  };
+
+  const handleCopyAct = () => {
+    void copySpreadsheet(
+      ['Nama', 'No HP', 'Status Contact', 'Status Deal', 'Tanggal Upload'],
+      actList.map((a) => [a.name, a.phone, a.contact, a.deal ?? '', a.date])
     );
   };
 
@@ -182,6 +210,9 @@ export function NiguriView() {
         <div className="card" style={{ marginTop: '16px' }}>
           <h3>
             <i className="fas fa-table" aria-hidden="true" /> Data Source H2 to H1{' '}
+            <button type="button" className="btn-download" onClick={handleCopyMatrix}>
+              <i className="fas fa-copy" aria-hidden="true" /> Copy Spreadsheet
+            </button>
             <button type="button" className="btn-download" onClick={handleDownloadMatrixCsv}>
               <i className="fas fa-download" aria-hidden="true" /> Download CSV
             </button>
@@ -235,6 +266,9 @@ export function NiguriView() {
             <button type="button" className="btn-download" onClick={handleDownloadActCsv}>
               <i className="fas fa-download" aria-hidden="true" /> Download CSV
             </button>
+            <button type="button" className="btn-download" onClick={handleCopyAct}>
+              <i className="fas fa-copy" aria-hidden="true" /> Copy Spreadsheet
+            </button>
           </h4>
           <div className="table-wrap">
             <table>
@@ -258,8 +292,8 @@ export function NiguriView() {
                       </span>
                     </td>
                     <td>
-                      <span className={`badge ${i % 2 === 0 ? 'success' : 'warning'}`}>
-                        {i % 2 === 0 ? 'Deal' : 'Follow Up'}
+                      <span className={`badge ${a.deal?.trim().toLowerCase() === 'deal' ? 'success' : 'warning'}`}>
+                        {a.deal ?? 'Belum tersedia'}
                       </span>
                     </td>
                     <td>{a.date}</td>

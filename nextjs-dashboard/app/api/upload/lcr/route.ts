@@ -152,10 +152,21 @@ export async function POST(request: NextRequest) {
     if (!customer) {
       customer = await prisma.customer.create({
         data: {
-          name: `LCR Customer - ${item.engineNumber}`,
-          normalizedName: `lcr customer ${item.engineNumber}`.slice(0, 120),
-          phone: null,
+          name: item.customerName || `LCR Customer - ${item.engineNumber}`,
+          normalizedName: (item.customerName || `LCR Customer - ${item.engineNumber}`).toLowerCase().replace(/\s+/g, ' ').slice(0, 120),
+          phone: item.phone,
+          nik: item.nik,
           contactIdentityStatus: 'UNVERIFIED',
+        },
+      });
+    } else if (item.customerName || item.phone || item.nik) {
+      customer = await prisma.customer.update({
+        where: { id: customer.id },
+        data: {
+          name: item.customerName || customer.name,
+          normalizedName: (item.customerName || customer.name).toLowerCase().replace(/\s+/g, ' ').slice(0, 120),
+          phone: item.phone || customer.phone,
+          nik: item.nik || customer.nik,
         },
       });
     }
@@ -165,7 +176,7 @@ export async function POST(request: NextRequest) {
       update: {
         frameNumber: item.frameNumber || existingVehicle?.frameNumber || 'UNKNOWN',
         customerId: customer.id,
-        model: item.ring || existingVehicle?.model || null,
+        model: item.motor || item.ring || existingVehicle?.model || null,
       },
       create: {
         engineNumber: item.engineNumber,

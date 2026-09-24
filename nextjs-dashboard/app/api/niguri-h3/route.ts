@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
       rows,
       totalAct: rows.length,
       terhubungCount: rows.filter((row) => row.contact.toLowerCase().includes('terhubung')).length,
-      dealCount: rows.filter((row) => row.deal.toLowerCase().includes('deal') || row.deal.toLowerCase().includes('follow')).length,
+      dealCount: rows.filter((row) => row.deal.trim().toLowerCase() === 'deal').length,
     });
   } catch (error) {
     console.error('Failed to load Niguri H3 activation data', error);

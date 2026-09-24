@@ -15,6 +15,12 @@ type UploadTypeOption = {
 
 type ActionButtonTone = 'primary' | 'navy' | 'blue' | 'green';
 
+type IntegrationSummary = {
+  totalCustomers: number;
+  completeCustomers: number;
+  incompleteCustomers: number;
+};
+
 const uploadTypeOptions: UploadTypeOption[] = [
   { value: 'H1', label: 'H1 - Penjualan', buttonLabel: 'Upload', buttonTone: 'primary' },
   { value: 'H2', label: 'H2 - Hasil FU (Service)', buttonLabel: 'Upload FU (H2)', buttonTone: 'navy' },
@@ -64,12 +70,17 @@ function SummaryStatCard({
 
 function FileDropZone({
   selectedFile,
+  selectedType,
+  selectedMonth,
   onFileSelected,
 }: {
   selectedFile: File | null;
+  selectedType: string;
+  selectedMonth: string;
   onFileSelected: (file: File | null) => void;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const selectedTypeLabel = uploadTypeOptions.find((option) => option.value === selectedType)?.label ?? selectedType;
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
@@ -82,7 +93,7 @@ function FileDropZone({
       onClick={() => inputRef.current?.click()}
       role="button"
       tabIndex={0}
-      aria-label="Pilih file Excel"
+      aria-label={`Pilih file untuk ${selectedTypeLabel}`}
       style={{
         marginTop: '16px',
         border: '2px dashed var(--border-strong)',
@@ -94,8 +105,23 @@ function FileDropZone({
       }}
     >
       <i className="fas fa-cloud-upload-alt" style={{ fontSize: '36px', color: '#CC0000', marginBottom: '8px' }} aria-hidden="true" />
-      <p style={{ fontWeight: 600, margin: '4px 0' }}>Klik atau seret file ke sini (XLSX, XLS, CSV)</p>
-      <div className="file-name" style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+      <p style={{ fontWeight: 600, margin: '4px 0' }}>Klik atau seret file ke sini</p>
+      <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+        {selectedTypeLabel} · {selectedMonth} · XLSX, XLS, CSV · Maks. 10 MB
+      </div>
+      <div
+        className="file-name"
+        style={{
+          display: 'inline-block',
+          marginTop: '4px',
+          padding: selectedFile ? '6px 10px' : 0,
+          borderRadius: '5px',
+          fontSize: '13px',
+          fontWeight: selectedFile ? 700 : 400,
+          color: selectedFile ? '#15803D' : 'var(--text-secondary)',
+          background: selectedFile ? '#DCFCE7' : 'transparent',
+        }}
+      >
         {selectedFile ? `File terpilih: ${selectedFile.name}` : 'Belum ada file dipilih'}
       </div>
       <input
@@ -225,6 +251,11 @@ export function UploadView() {
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const [integratedData, setIntegratedData] = useState<IntegratedRecord[]>([]);
+  const [integrationSummary, setIntegrationSummary] = useState<IntegrationSummary>({
+    totalCustomers: 0,
+    completeCustomers: 0,
+    incompleteCustomers: 0,
+  });
   const [page, setPage] = useState(1);
   const [loadingIntegration, setLoadingIntegration] = useState(true);
 
@@ -235,7 +266,7 @@ export function UploadView() {
       setLoadingIntegration(true);
 
       try {
-        const { data, error } = await safeFetchJson<{ rows: IntegratedRecord[] }>(
+        const { data, error } = await safeFetchJson<{ rows: IntegratedRecord[]; summary?: IntegrationSummary }>(
           '/api/integration',
           { cache: 'no-store' },
           { rows: [] }
@@ -248,6 +279,11 @@ export function UploadView() {
         }
 
         setIntegratedData(data?.rows ?? []);
+        setIntegrationSummary(data?.summary ?? {
+          totalCustomers: data?.rows?.length ?? 0,
+          completeCustomers: 0,
+          incompleteCustomers: data?.rows?.length ?? 0,
+        });
       } catch {
         if (active) setIntegratedData([]);
       } finally {
@@ -329,7 +365,9 @@ export function UploadView() {
         return;
       }
 
-      const count = Array.isArray(payload.preview) ? payload.preview.length : 0;
+      const count = typeof payload.totalRows === 'number'
+        ? payload.totalRows
+        : Array.isArray(payload.preview) ? payload.preview.length : 0;
       const newRecord: UploadHistoryRecord = {
         date: getToday(),
         type,
@@ -342,9 +380,10 @@ export function UploadView() {
       const importedRows = typeof payload.importedRows === 'number' ? payload.importedRows : count;
       const updatedRows = typeof payload.updatedSales === 'number' ? payload.updatedSales : 0;
       const warnings = typeof payload.warnings === 'number' ? payload.warnings : 0;
+      const duplicateRows = typeof payload.duplicateRows === 'number' ? payload.duplicateRows : 0;
       showToast(
         warnings > 0 ? 'warning' : 'success',
-        `Upload "${selectedFile.name}" selesai: ${importedRows} baris diproses, ${updatedRows} data diperbarui${warnings > 0 ? `, ${warnings} warning` : ''}.`,
+        `Upload "${selectedFile.name}" selesai: ${count} baris dibaca, ${importedRows} berhasil diproses, ${updatedRows} data diperbarui${duplicateRows > 0 ? `, ${duplicateRows} duplikat diperbarui` : ''}${warnings > 0 ? `, ${warnings} warning` : ''}.`,
       );
       setUploadProgress(100);
       await new Promise((resolve) => window.setTimeout(resolve, 350));
@@ -360,7 +399,7 @@ export function UploadView() {
 
   const handleRunIntegration = async () => {
     try {
-      const { data, error } = await safeFetchJson<{ rows: IntegratedRecord[] }>(
+      const { data, error } = await safeFetchJson<{ rows: IntegratedRecord[]; summary?: IntegrationSummary }>(
         '/api/integration',
         { cache: 'no-store' },
         { rows: [] }
@@ -372,15 +411,20 @@ export function UploadView() {
 
       const rows = data?.rows ?? [];
       setIntegratedData(rows);
+      setIntegrationSummary(data?.summary ?? {
+        totalCustomers: rows.length,
+        completeCustomers: 0,
+        incompleteCustomers: rows.length,
+      });
       showToast('success', `Integrasi berhasil diselesaikan! ${rows.length} data konsumen terhubung lintas sistem AHASS, H1, H2, dan H3.`);
     } catch (error) {
       showToast('error', getClientErrorMessage(error, 'Integrasi gagal dimuat. Silakan coba lagi.'));
     }
   };
 
-  const totalIntegrated = integratedData.length;
-  const totalSource = integratedData.length > 0 ? integratedData.length + 12 : 0;
-  const totalDuplicate = integratedData.length > 0 ? 12 : 0;
+  const totalIntegrated = integrationSummary.totalCustomers;
+  const totalComplete = integrationSummary.completeCustomers;
+  const totalIncomplete = integrationSummary.incompleteCustomers;
 
   const totalPages = Math.max(1, Math.ceil(integratedData.length / pageSize));
   const pagedIntegrated = useMemo(() => {
@@ -401,24 +445,8 @@ export function UploadView() {
     );
   };
 
-  const tones: Record<string, 'primary' | 'navy' | 'blue'> = {
-    H1: 'primary',
-    H2: 'navy',
-    H3: 'blue',
-    LCR: 'primary',
-    BFU: 'navy',
-  };
-
-  const renderUploadActionButton = (type: string, buttonLabel: string, tone: 'primary' | 'navy' | 'blue') => (
-    <ActionButton
-      key={type}
-      label={buttonLabel}
-      tone={tone}
-      icon="fa-file-upload"
-      disabled={isUploading}
-      onClick={() => processUpload(type)}
-    />
-  );
+  const selectedTypeLabel = uploadTypeOptions.find((option) => option.value === selectedType)?.label ?? selectedType;
+  const canRunIntegration = history.length > 0 || integratedData.length > 0;
 
   return (
     <CrmShell title="Upload & Integrasi" crumb="Data & Integration">
@@ -429,6 +457,11 @@ export function UploadView() {
         </div>
 
         <div className="card">
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '16px', color: 'var(--text-secondary)', fontSize: '13px' }}>
+            <strong style={{ color: 'var(--text-primary)' }}>Langkah 1</strong>
+            <span>Pilih jenis data, bulan, file, lalu upload.</span>
+          </div>
+
           <div className="form-row-5" style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'flex-end' }}>
             <div className="form-group" style={{ flex: '1 1 200px' }}>
               <label htmlFor="uploadType">
@@ -447,15 +480,22 @@ export function UploadView() {
             </div>
 
             <div className="form-group">
-              {renderUploadActionButton(selectedType, uploadTypeOptions.find((option) => option.value === selectedType)?.buttonLabel ?? 'Upload', tones[selectedType] ?? 'primary')}
+              <ActionButton
+                label={`Upload ${selectedTypeLabel}`}
+                tone="primary"
+                icon="fa-file-upload"
+                disabled={isUploading || !selectedFile}
+                onClick={() => processUpload()}
+              />
             </div>
-
-            {uploadTypeOptions
-              .filter((option) => option.value !== selectedType)
-              .map((option) => renderUploadActionButton(option.value, option.buttonLabel, option.buttonTone))}
           </div>
 
-          <FileDropZone selectedFile={selectedFile} onFileSelected={handleFileSelection} />
+          <FileDropZone
+            selectedFile={selectedFile}
+            selectedType={selectedType}
+            selectedMonth={selectedMonth}
+            onFileSelected={handleFileSelection}
+          />
           {isUploading && (
             <div className="upload-progress" role="status" aria-live="polite">
               <div className="upload-progress-label">
@@ -477,20 +517,26 @@ export function UploadView() {
 
         <div className="card">
           <h3>
-            <i className="fas fa-code-branch" aria-hidden="true" /> Integrasi Data
+            <i className="fas fa-code-branch" aria-hidden="true" /> Langkah 2: Integrasi Data
           </h3>
           <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '16px' }}>
             Gabungkan semua data dari AHASS, H1, H2, H3 menjadi satu database konsumen terintegrasi.
           </p>
 
           <div className="stats-grid">
-            <SummaryStatCard icon="fa-users" value={totalIntegrated} label="Total Data Terintegrasi" tone="cyan" />
-            <SummaryStatCard icon="fa-database" value={totalSource} label="Sumber Data (H1+H2+H3)" tone="purple" />
-            <SummaryStatCard icon="fa-copy" value={totalDuplicate} label="Duplikat Terdeteksi" tone="orange" />
+            <SummaryStatCard icon="fa-users" value={totalIntegrated} label="Total Konsumen" tone="cyan" />
+            <SummaryStatCard icon="fa-user-check" value={totalComplete} label="Data Lengkap" tone="purple" />
+            <SummaryStatCard icon="fa-user-clock" value={totalIncomplete} label="Perlu Dilengkapi" tone="orange" />
           </div>
 
           <div className="upload-actions" style={{ display: 'flex', gap: '8px', margin: '16px 0', flexWrap: 'wrap' }}>
-            <ActionButton label="Jalankan Integrasi" tone="navy" icon="fa-sync-alt" onClick={handleRunIntegration} />
+            <ActionButton
+              label="Jalankan Integrasi"
+              tone="navy"
+              icon="fa-sync-alt"
+              disabled={!canRunIntegration}
+              onClick={handleRunIntegration}
+            />
             <ActionButton label="Download CSV" tone="green" icon="fa-download" onClick={handleDownloadIntegrated} />
           </div>
 
@@ -528,7 +574,7 @@ export function UploadView() {
                 )) : (
                   <tr>
                     <td colSpan={5} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-secondary)' }}>
-                      Belum ada data terintegrasi. Klik tombol <strong>Jalankan Integrasi</strong> di atas untuk memproses data.
+                      Belum ada data terintegrasi. Upload data terlebih dahulu, lalu klik <strong>Jalankan Integrasi</strong>.
                     </td>
                   </tr>
                 )}

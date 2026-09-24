@@ -85,9 +85,12 @@ export function AdminView() {
 
       setForm({ name: '', email: '', password: '', role: 'AHASS' });
       setNotice('Akun baru berhasil dibuat.');
+      showToast('success', `Akun ${form.name} berhasil dibuat dengan role ${form.role}.`);
       await refreshUsers();
     } catch (submitError) {
-      setError((submitError as Error).message || 'Gagal menambahkan akun.');
+      const message = (submitError as Error).message || 'Gagal menambahkan akun.';
+      setError(message);
+      showToast('error', message);
     }
   };
 
@@ -111,8 +114,11 @@ export function AdminView() {
 
       setPasswordForm({ password: '' });
       setNotice('Password berhasil diubah.');
+      showToast('success', 'Password akun aktif berhasil diubah.');
     } catch (submitError) {
-      setError((submitError as Error).message || 'Gagal mengubah password.');
+      const message = (submitError as Error).message || 'Gagal mengubah password.';
+      setError(message);
+      showToast('error', message);
     }
   };
 
