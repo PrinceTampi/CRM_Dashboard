@@ -98,6 +98,50 @@ export function normPhone(p: string): string {
   return s;
 }
 
+export function spreadsheetTextFromRows(headers: string[], rows: (string | number)[][]) {
+  return [headers, ...rows]
+    .map((row) => row.map((value) => String(value ?? '').replace(/[\t\r\n]+/g, ' ')).join('\t'))
+    .join('\n');
+}
+
+export function copySpreadsheetToClipboard(headers: string[], rows: (string | number)[][]) {
+  const text = spreadsheetTextFromRows(headers, rows);
+
+  return (async () => {
+    if (typeof navigator === 'undefined' || typeof document === 'undefined') {
+      throw new Error('Clipboard hanya tersedia di browser.');
+    }
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+    } catch {
+      // Use the legacy clipboard path when browser permissions reject Clipboard API.
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    textarea.style.pointerEvents = 'none';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+
+    let copied = false;
+    try {
+      copied = document.execCommand('copy');
+    } finally {
+      document.body.removeChild(textarea);
+    }
+
+    if (!copied) throw new Error('Browser menolak akses clipboard.');
+  })();
+}
+
 export function downloadCsvFile(filename: string, headers: string[], rows: (string | number)[][]) {
   if (typeof window === 'undefined') return;
   const csvContent = [

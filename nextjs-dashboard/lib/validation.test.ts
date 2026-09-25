@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { validateEventPayload, validateLcrPayload, validatePasswordUpdatePayload, validateUserCreatePayload } from './validation.ts';
+import { spreadsheetTextFromRows } from './crm-data';
 
 test('validateEventPayload rejects invalid phone and short engine numbers', () => {
   const invalid = validateEventPayload({
@@ -62,4 +63,13 @@ test('validateUserCreatePayload and validatePasswordUpdatePayload enforce admin 
   const invalidPassword = validatePasswordUpdatePayload({ password: '123' });
   assert.equal(invalidPassword.ok, false);
   assert.match(invalidPassword.message ?? '', /minimal 6/i);
+});
+
+test('spreadsheetTextFromRows keeps tab-delimited structure and preserves values', () => {
+  const text = spreadsheetTextFromRows(['Nama', 'No HP', 'Status'], [
+    ['Andi', '0812', 'Terhubung'],
+    ['Budi', '0813', 'Belum'],
+  ]);
+
+  assert.equal(text, 'Nama\tNo HP\tStatus\nAndi\t0812\tTerhubung\nBudi\t0813\tBelum');
 });

@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { CrmShell } from '@/component/layout/crm-shell';
-import { downloadExcelFile } from '@/lib/crm-data';
+import { CrmShell, useCrmToast } from '@/component/layout/crm-shell';
+import { copySpreadsheetToClipboard, downloadExcelFile } from '@/lib/crm-data';
 
 const months = ['Jan-26', 'Feb-26', 'Mar-26', 'Apr-26', 'May-26', 'Jun-26', 'Jul-26', 'Aug-26'];
 const h1Metrics = ['Total Penjualan Part (Rp)', 'Analysis By', 'Data Filtering', 'SMS/WA Sent', 'Interest (M)', 'Workload from (M-1)', 'Prospect Customer (M-2)', 'Prospect Customer (M-1)', 'Total Data Di Follow Up', 'Contacted by Phone', 'Unreachable', 'Rejected', 'Workload', 'Total Prospect', 'Deal / Konsumen', 'Hot Prospect', 'Low Prospect', 'Not Deal', 'Penjualan Part (Rp)', 'Penjualan Part / Konsumen (Rp)', 'Penjualan Part / Total Penjualan Part (Rp)'];
@@ -27,6 +27,35 @@ function paintRows(rows: SpreadsheetCell[][], colorAt: (row: number, column: num
       return painted;
     });
   });
+}
+
+function spreadsheetRowsToClipboard(rows: SpreadsheetCell[][], columnCount: number): { headers: string[]; rows: (string | number)[][] } {
+  const occupied = new Map<string, string | number>();
+  const flattened: (string | number)[][] = [];
+
+  rows.forEach((row, rowIndex) => {
+    const values: (string | number)[] = Array.from({ length: columnCount }, () => '');
+    let column = 0;
+    row.forEach((cell) => {
+      while (occupied.has(`${rowIndex}:${column}`)) column += 1;
+      const cellValue = cell.value ?? '';
+      const colSpan = cell.colSpan ?? 1;
+      const rowSpan = cell.rowSpan ?? 1;
+      for (let rowOffset = 0; rowOffset < rowSpan; rowOffset += 1) {
+        for (let columnOffset = 0; columnOffset < colSpan; columnOffset += 1) {
+          const targetRow = rowIndex + rowOffset;
+          const targetColumn = column + columnOffset;
+          occupied.set(`${targetRow}:${targetColumn}`, cellValue);
+          if (targetRow === rowIndex && targetColumn < columnCount) values[targetColumn] = cellValue;
+        }
+      }
+      column += colSpan;
+    });
+    flattened[rowIndex] = values.map((cellValue, index) => cellValue || occupied.get(`${rowIndex}:${index}`) || '');
+  });
+
+  const [headers = [], ...body] = flattened;
+  return { headers: headers.map(String), rows: body };
 }
 
 const h1SourceGroups = ['H1 (HANYA BELI)', '(BELI DAN SERVICE - DEALER SENDIRI)', '(HANYA SERVICE - DEALER LAIN)'];
@@ -95,36 +124,12 @@ function addMonths(date: string, monthsToAdd: number) {
 }
 
 export function NiguriReportView({ initialTab = 'h1' }: { initialTab?: 'h1' | 'h2' | 'h3' }) {
+  const { showToast } = useCrmToast();
   const [tab, setTab] = useState<'h1' | 'h2' | 'h3'>(initialTab);
   const [dealer, setDealer] = useState(dealerOptions[0]);
   const [h1Data, setH1Data] = useState<H1ReportData>({ totalDataSource: 0, totalDataAnalysisResult: 0, totalProspect: 0, totalCustomerDeal: 0, totalUnitSold: 0 });
   const [dmmsFile, setDmmsFile] = useState('');
   const [invoiceDate, setInvoiceDate] = useState('2026-01-15');
-  const [h2Rows, setH2Rows] = useState<Array<{ name: string; phone: string; motor: string; contact: string; progress: string; invoiceDate: string; kpb: string }>>([]);
-
-  useEffect(() => {
-    let active = true;
-
-    const load = async () => {
-      try {
-        const month = invoiceDate.slice(0, 7);
-        const response = await fetch(`/api/niguri/h2?month=${month}`, { cache: 'no-store' });
-        const payload = await response.json();
-        if (!active) return;
-        const rows = (payload.rows ?? []).slice(0, 12);
-        setH2Rows(rows.map((row: any, index: number) => ({
-          ...row,
-          invoiceDate: addMonths(invoiceDate, [2, 4, 8, 12][index % 4]),
-          kpb: `KPB ${(index % 4) + 1}`,
-        })));
-      } catch {
-        if (active) setH2Rows([]);
-      }
-    };
-
-    load();
-    return () => { active = false; };
-  }, [invoiceDate]);
 
   useEffect(() => {
     let active = true;
@@ -136,19 +141,38 @@ export function NiguriReportView({ initialTab = 'h1' }: { initialTab?: 'h1' | 'h
   }, [dealer, invoiceDate]);
 
   const h1Rows = [['Nama Dealer', dealer], ['MONTH', ...months], ['Data Source H2 to H1'], ...h1Metrics.map((metric) => [metric, '0'])];
-  const h2Export = [['BULAN REPORT', invoiceDate], ['DEALER', dealer], ['KPB', 'Tanggal Target', 'Total Data Source', 'Serviced', 'Not Yet Service', 'Contacted', 'Not Contacted', 'Workload', 'Total Visit KPB'], ...h2Rows.map((row) => [row.kpb, row.invoiceDate, row.name, row.contact || 'Belum FU', row.progress || 'Belum Service', row.contact?.includes('Terhubung') ? 1 : 0, row.contact?.includes('Terhubung') ? 0 : 1, 0, 0])];
   const h3Rows = [['Nama Dealer', dealer], ['YEAR', 'Belum tersedia'], ['MONTH', ...months], ['Metric', 'H1 to H3', 'H2 to H3'], ...['Total Penjualan Part (Rp)', 'SMS/WA Sent', 'Interest (M)', 'Total Prospect', 'Deal / Konsumen', 'Penjualan Part / Konsumen (Rp)'].map((metric) => [metric, '—', '—'])];
-  const downloadReport = () => downloadExcelFile(`Report_Niguri_${dealer.replaceAll(' ', '_')}.xlsx`, [{ name: 'Niguri H1', rows: h1Rows }, { name: 'Niguri H2 KPB', rows: h2Export }, { name: 'Niguri H3', rows: h3Rows }]);
+  const h1Clipboard = () => spreadsheetRowsToClipboard(buildH1Rows(h1Data), 26);
+  const h3Clipboard = () => spreadsheetRowsToClipboard(buildH3Rows(dealer), 50);
+  const downloadReport = () => downloadExcelFile(`Report_Niguri_${dealer.replaceAll(' ', '_')}.xlsx`, [{ name: 'Niguri H1', rows: h1Rows }, { name: 'Niguri H3', rows: h3Rows }]);
+
+  const copySheetRows = async (headers: string[], rows: (string | number)[][]) => {
+    try {
+      await copySpreadsheetToClipboard(headers, rows);
+      showToast('success', 'Data berhasil disalin. Silakan paste ke spreadsheet.');
+    } catch {
+      showToast('error', 'Data gagal disalin ke clipboard.');
+    }
+  };
+
+  const handleCopyH1 = () => {
+    const clipboard = h1Clipboard();
+    void copySheetRows(clipboard.headers, clipboard.rows);
+  };
+
+  const handleCopyH3 = () => {
+    const clipboard = h3Clipboard();
+    void copySheetRows(clipboard.headers, clipboard.rows);
+  };
 
   return <CrmShell title="Report Niguri" crumb="Service & Part">
     <div className="tab-content" style={{ display: 'block' }}>
-      <div className="page-heading"><h2>Report Niguri</h2><p>Report H1, H2 KPB, dan H3 dengan format matriks dealer dan export Excel.</p></div>
+      <div className="page-heading"><h2>Report Niguri</h2><p>Report H1 dan H3 dengan format matriks dealer dan export Excel.</p></div>
       <div className="filter-bar"><label htmlFor="niguriDealer">Nama Dealer</label><select id="niguriDealer" value={dealer} onChange={(e) => setDealer(e.target.value)}>{dealerOptions.map((option) => <option key={option}>{option}</option>)}</select><label htmlFor="niguriDmms">Upload DMMS H1</label><input id="niguriDmms" type="file" accept=".xlsx,.xls,.csv" onChange={(e) => setDmmsFile(e.target.files?.[0]?.name || '')} /><button type="button" className="btn-download" onClick={downloadReport}><i className="fas fa-file-excel" aria-hidden="true" /> Download Excel Niguri</button></div>
       {dmmsFile && <div className="kpi-hint"><i className="fas fa-check-circle" aria-hidden="true" /> DMMS siap dipakai dalam report H1: {dmmsFile}</div>}
-      <div className="filter-bar"><Link href="/niguri/h1" className={`btn-sm ${tab === 'h1' ? 'primary' : ''}`}>Niguri H1</Link><Link href="/niguri/h2" className={`btn-sm ${tab === 'h2' ? 'primary' : ''}`}>Niguri H2 / KPB</Link><Link href="/niguri/h3" className={`btn-sm ${tab === 'h3' ? 'primary' : ''}`}>Niguri H3</Link></div>
-      {tab === 'h1' && <div className="card niguri-format-card"><h3>Format Niguri H1 <span className="badge info">{dealer}</span></h3><SpreadsheetGrid rows={buildH1Rows(h1Data)} columnCount={26} className="niguri-h1-sheet" /></div>}
-      {tab === 'h2' && <div className="card"><h3>Format Niguri H2 - KPB berdasarkan tanggal faktur</h3><div className="filter-bar"><label htmlFor="invoiceDate">Tanggal Faktur</label><input id="invoiceDate" type="date" value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} /></div><div className="stats-grid">{[2, 4, 8, 12].map((month, index) => <Link href={`/niguri/kpb/${index + 1}`} className="stat-card stat-static" key={month}><div className="stat-icon orange"><i className="fas fa-calendar-check" /></div><div className="stat-info"><div className="number">KPB {index + 1}</div><div className="label">H+{month} bulan: {addMonths(invoiceDate, month)}</div></div></Link>)}</div><div className="table-wrap"><table className="niguri-table"><thead><tr><th>KPB</th><th>Tanggal Target</th><th>Nama</th><th>Kontak</th><th>Hasil Service</th></tr></thead><tbody>{h2Rows.map((row, index) => <tr key={index}><td><strong>{row.kpb}</strong></td><td>{row.invoiceDate}</td><td>{row.name}</td><td>{row.contact || 'Belum FU'}</td><td>{row.progress || 'Belum Service'}</td></tr>)}</tbody></table></div></div>}
-      {tab === 'h3' && <div className="card niguri-format-card"><h3>Format Niguri H3 - Parts dan Conversion</h3><SpreadsheetGrid rows={buildH3Rows(dealer)} columnCount={50} className="niguri-h3-sheet" /></div>}
+      <div className="filter-bar"><Link href="/niguri/h1" className={`btn-sm ${tab === 'h1' ? 'primary' : ''}`}>Niguri H1</Link><Link href="/niguri/h3" className={`btn-sm ${tab === 'h3' ? 'primary' : ''}`}>Niguri H3</Link></div>
+      {tab === 'h1' && <div className="card niguri-format-card"><h3>Format Niguri H1 <span className="badge info">{dealer}</span><button type="button" className="btn-download" onClick={handleCopyH1} style={{ marginLeft: '12px' }}><i className="fas fa-copy" aria-hidden="true" /> Copy Sheet</button></h3><SpreadsheetGrid rows={buildH1Rows(h1Data)} columnCount={26} className="niguri-h1-sheet" /></div>}
+      {tab === 'h3' && <div className="card niguri-format-card"><h3>Format Niguri H3 - Parts dan Conversion<button type="button" className="btn-download" onClick={handleCopyH3} style={{ marginLeft: '12px' }}><i className="fas fa-copy" aria-hidden="true" /> Copy Sheet</button></h3><SpreadsheetGrid rows={buildH3Rows(dealer)} columnCount={50} className="niguri-h3-sheet" /></div>}
     </div>
   </CrmShell>;
 }

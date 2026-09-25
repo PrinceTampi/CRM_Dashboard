@@ -58,6 +58,10 @@ function normalizeDealerCode(name: string | null): string {
   return base || 'DEALER';
 }
 
+function normalizeCustomerName(value: string | null): string {
+  return (value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const file = formData.get('file');
@@ -198,6 +202,49 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    let customer = item.noHp
+      ? await prisma.customer.findFirst({ where: { phone: item.noHp } })
+      : null;
+    if (!customer && item.engineNumber) {
+      const vehicleByEngine = await prisma.vehicle.findUnique({ where: { engineNumber: item.engineNumber }, select: { customer: true } });
+      customer = vehicleByEngine?.customer ?? null;
+    }
+    if (!customer && item.customerName) {
+      customer = await prisma.customer.findFirst({ where: { normalizedName: normalizeCustomerName(item.customerName) } });
+    }
+    if (!customer && (item.customerName || item.noHp)) {
+      customer = await prisma.customer.create({
+        data: {
+          name: item.customerName || 'Unknown Customer',
+          normalizedName: normalizeCustomerName(item.customerName || 'Unknown Customer'),
+          phone: item.noHp,
+          contactIdentityStatus: item.noHp ? 'VERIFIED' : 'UNVERIFIED',
+        },
+      });
+    }
+
+    let vehicle = item.engineNumber
+      ? await prisma.vehicle.findUnique({ where: { engineNumber: item.engineNumber } })
+      : null;
+    if (!vehicle && item.engineNumber && customer) {
+      vehicle = await prisma.vehicle.create({
+        data: {
+          engineNumber: item.engineNumber,
+          frameNumber: item.frameNumber || `UNKNOWN-${item.engineNumber}`,
+          customerId: customer.id,
+        },
+      });
+    }
+    if (customer || vehicle) {
+      await prisma.h23Invoice.update({
+        where: { id: invoice.id },
+        data: {
+          customerId: customer?.id ?? undefined,
+          vehicleId: vehicle?.id ?? undefined,
+        },
+      });
+    }
+
     invoiceSummary.push({ invoiceId: invoice.id, itemType: item.transactionType });
 
     if (item.transactionType === 'SERVICE') {
@@ -210,6 +257,8 @@ export async function POST(request: NextRequest) {
           },
         },
         update: {
+          customerId: customer?.id ?? undefined,
+          vehicleId: vehicle?.id ?? undefined,
           description: item.itemDescription || 'SERVICE',
           quantity: item.quantity || 0,
           price: item.price ? String(item.price) : '0',
@@ -220,6 +269,8 @@ export async function POST(request: NextRequest) {
         },
         create: {
           invoiceId: invoice.id,
+          customerId: customer?.id,
+          vehicleId: vehicle?.id,
           dealerId: dealer.id,
           itemNumber: item.itemNumber,
           description: item.itemDescription || 'SERVICE',

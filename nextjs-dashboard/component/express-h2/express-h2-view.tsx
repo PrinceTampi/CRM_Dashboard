@@ -66,15 +66,18 @@ export function ExpressH2View() {
   const [terhubung, setTerhubung] = useState(0);
   const [eventAhass, setEventAhass] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     let active = true;
 
     const load = async () => {
       setLoading(true);
+      setError('');
 
       try {
         const response = await fetch(`/api/express-h2?month=${selectedMonth}`, { cache: 'no-store' });
+        if (!response.ok) throw new Error('API Express H2 gagal dimuat.');
         const payload = await response.json();
 
         if (!active) return;
@@ -83,12 +86,13 @@ export function ExpressH2View() {
         setTotalLeads(Number(payload.totalLeads ?? 0));
         setTerhubung(Number(payload.terhubung ?? 0));
         setEventAhass(Number(payload.eventAhass ?? 0));
-      } catch {
+      } catch (loadError) {
         if (active) {
           setFuList([]);
           setTotalLeads(0);
           setTerhubung(0);
           setEventAhass(0);
+          setError(loadError instanceof Error ? loadError.message : 'Data Express H2 gagal dimuat.');
         }
       } finally {
         if (active) setLoading(false);
@@ -159,17 +163,19 @@ export function ExpressH2View() {
         </div>
 
         <div className="stats-grid">
-          <StatCard label="Total Data FU Juli" value={totalLeads} icon="fa-user-friends" tone="blue" />
-          <StatCard label="Terhubung (FU Juli)" value={terhubung} icon="fa-phone-alt" tone="green" />
-          <StatCard label="Tidak Terhubung (FU Juli)" value={tidakTerhubung} icon="fa-phone-slash" tone="red" />
+          <StatCard label={`Total Data FU ${selectedMonth}`} value={totalLeads} icon="fa-user-friends" tone="blue" />
+          <StatCard label={`Terhubung (FU ${selectedMonth})`} value={terhubung} icon="fa-phone-alt" tone="green" />
+          <StatCard label={`Tidak Terhubung (FU ${selectedMonth})`} value={tidakTerhubung} icon="fa-phone-slash" tone="red" />
           <StatCard label="Total Event AHASS" value={eventAhass} icon="fa-calendar-day" tone="pink" />
         </div>
 
         <div className="stats-grid" style={{ marginTop: '12px' }}>
-          <StatCard label="% Terhubung vs Total FU Juli" value={Number(pctConnect)} icon="fa-percent" tone="cyan" />
+          <StatCard label={`% Terhubung vs Total FU ${selectedMonth}`} value={Number(pctConnect)} icon="fa-percent" tone="cyan" />
           <StatCard label="% Event AHASS vs Terhubung" value={Number(pctAhassVsConnect)} icon="fa-percent" tone="purple" />
           <StatCard label="Contribution Rate (Event AHASS vs DB)" value={Number(pctOverall)} icon="fa-percent" tone="orange" />
         </div>
+
+        {error && <div className="kpi-hint error"><i className="fas fa-exclamation-triangle" aria-hidden="true" /> {error}</div>}
 
         <div className="row-2col" style={{ marginTop: '16px' }}>
           <SectionCard title="Status Kontak">

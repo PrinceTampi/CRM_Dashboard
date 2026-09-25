@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { CrmShell, useCrmToast } from '@/component/layout/crm-shell';
-import { downloadCsvFile } from '@/lib/crm-data';
+import { copySpreadsheetToClipboard, downloadCsvFile } from '@/lib/crm-data';
 import type { H3ActivateRecord } from '@/lib/definitions';
 
 const monthOptions = [
@@ -142,12 +142,8 @@ export function NiguriView() {
   };
 
   const copySpreadsheet = async (headers: string[], rows: (string | number)[][]) => {
-    const spreadsheetText = [headers, ...rows]
-      .map((row) => row.map((value) => String(value ?? '').replace(/[\t\r\n]+/g, ' ')).join('\t'))
-      .join('\n');
-
     try {
-      await navigator.clipboard.writeText(spreadsheetText);
+      await copySpreadsheetToClipboard(headers, rows);
       showToast('success', 'Data berhasil disalin. Silakan paste ke spreadsheet.');
     } catch {
       showToast('error', 'Data gagal disalin ke clipboard.');
