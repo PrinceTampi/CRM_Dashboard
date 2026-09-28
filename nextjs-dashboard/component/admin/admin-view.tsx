@@ -12,14 +12,19 @@ type UserRecord = {
   createdAt: string;
 };
 
+type DealerRecord = { id: string; code: string; name: string };
+
 export function AdminView() {
   const { showToast } = useCrmToast();
   const [users, setUsers] = useState<UserRecord[]>([]);
+  const [dealers, setDealers] = useState<DealerRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [me, setMe] = useState<{ name: string; email: string; role: 'ADMIN' | 'AHASS' } | null>(null);
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'AHASS' as 'ADMIN' | 'AHASS' });
+  const [dealerForm, setDealerForm] = useState({ code: '', name: '' });
+  const [savingDealer, setSavingDealer] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ password: '' });
   const [resettingData, setResettingData] = useState(false);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
@@ -35,6 +40,17 @@ export function AdminView() {
       setUsers(result.users || []);
     } catch (loadError) {
       setError((loadError as Error).message || 'Gagal memuat daftar akun.');
+    }
+  };
+
+  const refreshDealers = async () => {
+    try {
+      const response = await fetch('/api/admin/dealers', { credentials: 'include', cache: 'no-store' });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.message || 'Gagal memuat master dealer.');
+      setDealers(result.dealers || []);
+    } catch (loadError) {
+      setError((loadError as Error).message || 'Gagal memuat master dealer.');
     }
   };
 
@@ -56,7 +72,7 @@ export function AdminView() {
       setLoading(true);
       setError('');
       try {
-        await Promise.all([refreshMe(), refreshUsers()]);
+        await Promise.all([refreshMe(), refreshUsers(), refreshDealers()]);
       } finally {
         setLoading(false);
       }
@@ -91,6 +107,33 @@ export function AdminView() {
       const message = (submitError as Error).message || 'Gagal menambahkan akun.';
       setError(message);
       showToast('error', message);
+    }
+  };
+
+  const handleCreateDealer = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setNotice('');
+    setError('');
+    setSavingDealer(true);
+    try {
+      const response = await fetch('/api/admin/dealers', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dealerForm),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.message || 'Gagal menambahkan dealer.');
+      setDealerForm({ code: '', name: '' });
+      setNotice(`Dealer ${result.dealer.name} berhasil ditambahkan.`);
+      showToast('success', `${result.dealer.name} berhasil ditambahkan ke master dealer.`);
+      await refreshDealers();
+    } catch (submitError) {
+      const message = (submitError as Error).message || 'Gagal menambahkan dealer.';
+      setError(message);
+      showToast('error', message);
+    } finally {
+      setSavingDealer(false);
     }
   };
 
@@ -248,6 +291,36 @@ export function AdminView() {
               <button type="submit" className="btn-submit" disabled={loading}>Simpan Akun</button>
             </div>
           </form>
+        </div>
+
+        <div className="card" style={{ marginBottom: '16px' }}>
+          <h3><i className="fas fa-store" aria-hidden="true" /> Master Dealer</h3>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginBottom: '12px' }}>
+            Masukkan kode resmi dealer. Dealer yang didaftarkan di sini tersedia pada pilihan report dan upload Niguri.
+          </p>
+          <form onSubmit={handleCreateDealer} style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: '16px' }}>
+            <div className="form-group" style={{ flex: '1 1 180px' }}>
+              <label htmlFor="dealer-code">Kode Dealer Resmi</label>
+              <input id="dealer-code" value={dealerForm.code} onChange={(event) => setDealerForm((current) => ({ ...current, code: event.target.value }))} maxLength={64} required />
+            </div>
+            <div className="form-group" style={{ flex: '1 1 220px' }}>
+              <label htmlFor="dealer-name">Nama Dealer</label>
+              <input id="dealer-name" value={dealerForm.name} onChange={(event) => setDealerForm((current) => ({ ...current, name: event.target.value }))} maxLength={160} required />
+            </div>
+            <button type="submit" className="btn-submit" disabled={savingDealer}>
+              <i className={`fas ${savingDealer ? 'fa-spinner fa-spin' : 'fa-plus'}`} aria-hidden="true" /> {savingDealer ? 'Menyimpan...' : 'Tambah Dealer'}
+            </button>
+          </form>
+          {dealers.length === 0 ? (
+            <div className="kpi-hint">Belum ada dealer di master.</div>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>Kode Dealer</th><th>Nama Dealer</th></tr></thead>
+                <tbody>{dealers.map((dealer) => <tr key={dealer.id}><td><code>{dealer.code}</code></td><td>{dealer.name}</td></tr>)}</tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         <div className="card" style={{ marginBottom: '16px' }}>

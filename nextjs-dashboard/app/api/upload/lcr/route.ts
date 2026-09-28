@@ -61,6 +61,7 @@ function normalizeDealerCode(value: string | null): string {
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const file = formData.get('file');
+  const sourceMonth = String(formData.get('month') ?? '').trim() || null;
 
   if (!(file instanceof File)) {
     return NextResponse.json({ ok: false, message: 'File wajib diunggah.' }, { status: 400 });
@@ -102,7 +103,7 @@ export async function POST(request: NextRequest) {
         create: parsedRows.map((item, index) => ({
           sheetName: targetSheet.sheetName,
           rowNumber: index + 2,
-          rawData: safeRawJson({ row: item.raw, headerMap: mappedHeaders }) as any,
+          rawData: safeRawJson({ row: item.raw, headerMap: mappedHeaders, sourceMonth }) as any,
           status: item.engineNumber ? 'VALID' : 'WARNING',
           importedEntity: 'lcr-campaign',
           errorMessage: item.engineNumber ? null : 'MISSING_ENGINE_NUMBER',

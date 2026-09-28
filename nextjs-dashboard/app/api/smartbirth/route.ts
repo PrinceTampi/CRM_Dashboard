@@ -78,6 +78,7 @@ export async function GET(request: Request) {
 
     const followUpList = monthFollowUps
       .map((item) => ({
+        customerId: item.customerId,
         name: item.customer?.name ?? 'Customer tidak diketahui',
         phone: item.customer?.phone ?? '',
         contact: item.contactStatus ?? 'Belum ada status',
@@ -106,5 +107,53 @@ export async function GET(request: Request) {
       },
       { status: 200 }
     );
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const customerId = typeof body?.customerId === 'string' ? body.customerId.trim() : '';
+    const contactStatus = typeof body?.contactStatus === 'string' ? body.contactStatus.trim() : '';
+    const dealStatus = typeof body?.dealStatus === 'string' ? body.dealStatus.trim() : '';
+    const followUpDate = typeof body?.followUpDate === 'string' ? new Date(`${body.followUpDate}T00:00:00.000Z`) : null;
+
+    if (!customerId || !contactStatus || !dealStatus || !followUpDate || Number.isNaN(followUpDate.getTime())) {
+      return NextResponse.json({ ok: false, message: 'Konsumen, tanggal FU, status kontak, dan status deal wajib diisi.' }, { status: 400 });
+    }
+
+    const customer = await prisma.customer.findUnique({ where: { id: customerId } });
+    if (!customer || !customer.birthDate) {
+      return NextResponse.json({ ok: false, message: 'Konsumen ulang tahun tidak ditemukan.' }, { status: 404 });
+    }
+
+    const existing = await prisma.birthdayFollowUp.findFirst({
+      where: { customerId, followUpDate },
+      orderBy: { id: 'asc' },
+    });
+    const saved = existing
+      ? await prisma.birthdayFollowUp.update({
+        where: { id: existing.id },
+        data: { contactStatus, dealStatus },
+      })
+      : await prisma.birthdayFollowUp.create({
+        data: { customerId, followUpDate, contactStatus, dealStatus },
+      });
+
+    return NextResponse.json({
+      ok: true,
+      record: {
+        id: saved.id,
+        customerId,
+        name: customer.name,
+        phone: customer.phone ?? '',
+        contact: saved.contactStatus ?? '',
+        deal: saved.dealStatus ?? '',
+        date: formatDateOnly(saved.followUpDate),
+      },
+    });
+  } catch (error) {
+    console.error('Failed to save birthday follow-up', error);
+    return NextResponse.json({ ok: false, message: 'Gagal menyimpan hasil follow-up ulang tahun.' }, { status: 500 });
   }
 }

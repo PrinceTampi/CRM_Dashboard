@@ -18,20 +18,36 @@ export async function GET() {
       include: {
         vehicles: true,
         h1Sales: { orderBy: { invoiceDate: 'desc' }, take: 1 },
+        h23Invoices: {
+          orderBy: { invoiceDate: 'desc' },
+          take: 1,
+          include: { serviceItems: true, partItems: true },
+        },
         eventRegistrations: { orderBy: { eventDate: 'desc' }, take: 1 },
       },
     });
 
     const rows = customers.map((customer) => {
       const latestSale = customer.h1Sales[0];
+      const latestInvoice = customer.h23Invoices[0];
       const latestEvent = customer.eventRegistrations[0];
-      const latestDate = latestSale?.invoiceDate ?? latestEvent?.eventDate ?? customer.createdAt;
+      const latestTransaction = [
+        latestSale && { date: latestSale.invoiceDate, source: 'H1 Penjualan' },
+        latestInvoice && {
+          date: latestInvoice.invoiceDate,
+          source: latestInvoice.serviceItems.length > 0 && latestInvoice.partItems.length > 0
+            ? 'H2 Service + H3 Sparepart'
+            : latestInvoice.serviceItems.length > 0 ? 'H2 Service' : 'H3 Sparepart',
+        },
+        latestEvent && { date: latestEvent.eventDate, source: 'AHASS Event' },
+      ].filter((item) => item !== null).sort((left, right) => right.date.getTime() - left.date.getTime())[0];
+      const latestDate = latestTransaction?.date ?? customer.createdAt;
 
       return {
         name: customer.name,
         phone: customer.phone ?? '',
         engine: customer.vehicles[0]?.engineNumber ?? latestEvent?.engineNumber ?? '',
-        source: latestSale ? 'H1 Penjualan' : latestEvent ? 'AHASS Event' : 'Master Customer',
+        source: latestTransaction?.source ?? 'Master Customer',
         date: formatDateOnly(latestDate),
       };
     });

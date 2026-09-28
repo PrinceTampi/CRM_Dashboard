@@ -7,6 +7,13 @@ export type NormalizedProspectRow = {
   customerName: string | null;
   phone: string | null;
   salesChannel: string | null;
+  eventCode: string | null;
+  eventDescription: string | null;
+  platform: string | null;
+  contactStatus: string | null;
+  contactChannel: string | null;
+  nextFollowUp: Date | null;
+  slaDeadline: Date | null;
   prospectType: string | null;
   customerType: string | null;
   assignedDealerCode: string | null;
@@ -19,6 +26,13 @@ const HEADER_ALIASES: Record<string, string> = {
   'id guestbook': 'guestbook_id',
   'tgl input guestbook': 'guestbook_at',
   'channel penjualan': 'sales_channel',
+  'kode event': 'event_code',
+  'deskripsi event': 'event_description',
+  'platform data': 'platform',
+  'contact status': 'contact_status',
+  'media contact fu': 'contact_channel',
+  'next follow up': 'next_follow_up',
+  'batas sla': 'sla_deadline',
   'nama prospek': 'customer_name',
   'no. hp prospek': 'phone',
   'no_hp_prospek': 'phone',
@@ -75,6 +89,13 @@ export function normalizeProspectRow(row: ProspectSourceRow): NormalizedProspect
     customerName: normalizeText(row['Nama Prospek'] ?? row.customer_name ?? row.name),
     phone: normalizePhone(row['No. HP Prospek'] ?? row['No HP Prospek'] ?? row.phone),
     salesChannel: normalizeText(row['Channel Penjualan'] ?? row.sales_channel),
+    eventCode: normalizeText(row['Kode Event'] ?? row.event_code),
+    eventDescription: normalizeText(row['Deskripsi Event'] ?? row.event_description),
+    platform: normalizeText(row['Platform Data'] ?? row.platform),
+    contactStatus: normalizeText(row['Contact Status'] ?? row.contact_status),
+    contactChannel: normalizeText(row['Media Contact FU'] ?? row.contact_channel),
+    nextFollowUp: parseDateValue(row['Next Follow Up'] ?? row.next_follow_up),
+    slaDeadline: parseDateValue(row['Batas SLA'] ?? row.sla_deadline),
     prospectType: normalizeText(row['Tipe Prospek'] ?? row.prospect_type),
     customerType: normalizeText(row['Tipe Customer'] ?? row.customer_type),
     assignedDealerCode: normalizeText(row['Dealer'] ?? row.assigned_dealer ?? row.dealer)?.toUpperCase() ?? null,

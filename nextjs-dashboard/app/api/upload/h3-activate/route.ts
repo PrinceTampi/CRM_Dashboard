@@ -61,6 +61,7 @@ function normalizeDealerCode(value: string | null): string {
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const file = formData.get('file');
+  const sourceMonth = String(formData.get('month') ?? '').trim() || null;
 
   if (!(file instanceof File)) {
     return NextResponse.json({ ok: false, message: 'File wajib diunggah.' }, { status: 400 });
@@ -90,7 +91,7 @@ export async function POST(request: NextRequest) {
       const normalized = Object.fromEntries((headerRow || []).map((header, index) => [header, row[index] ?? '']));
       return normalizeH3ActivationRow(normalized);
     })
-    .filter((row) => row.sourceId !== null && (row.customerName || row.noHp || row.assignedDealerCode));
+    .filter((row) => Object.values(row.raw).some((value) => String(value ?? '').trim()));
 
   const batch = await prisma.importBatch.create({
     data: {
@@ -102,7 +103,7 @@ export async function POST(request: NextRequest) {
         create: parsedRows.map((item, index) => ({
           sheetName: targetSheet.sheetName,
           rowNumber: index + 2,
-          rawData: safeRawJson({ row: item.raw, headerMap: mappedHeaders }) as any,
+          rawData: safeRawJson({ row: item.raw, headerMap: mappedHeaders, sourceMonth }) as any,
           status: item.sourceId ? 'VALID' : 'WARNING',
           importedEntity: 'h3-activation',
           errorMessage: item.sourceId ? null : 'MISSING_SOURCE_ID',
@@ -110,17 +111,28 @@ export async function POST(request: NextRequest) {
       },
     },
   });
+  const importRows = await prisma.importRow.findMany({
+    where: { batchId: batch.id },
+    orderBy: { rowNumber: 'asc' },
+  });
 
   let warningCount = 0;
+  let importedRows = 0;
 
   for (const [index, item] of parsedRows.entries()) {
     const rowNumber = index + 2;
+    const importRow = importRows[index];
 
     if (!item.sourceId) {
       warningCount += 1;
+      await prisma.importRow.update({
+        where: { id: importRow.id },
+        data: { status: 'WARNING', errorMessage: 'MISSING_SOURCE_ID' },
+      });
       await prisma.auditLog.create({
         data: {
           batchId: batch.id,
+          importRowId: importRow.id,
           rowNumber,
           fieldName: 'source_id',
           errorCode: 'MISSING_SOURCE_ID',
@@ -154,7 +166,16 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    await prisma.h3ActivationLead.upsert({
+    const contactStatusLov = item.contactStatus
+      ? await prisma.lovValue.findFirst({ where: { value: item.contactStatus, active: true } })
+      : null;
+    const notDealReasonLov = item.notDealReason
+      ? await prisma.lovValue.findFirst({ where: { value: item.notDealReason, active: true } })
+      : null;
+    if (item.contactStatus && !contactStatusLov) warningCount += 1;
+    if (item.notDealReason && !notDealReasonLov) warningCount += 1;
+
+    const lead = await prisma.h3ActivationLead.upsert({
       where: { sourceId: item.sourceId },
       update: {
         uploadedAt: item.uploadedAt || new Date(),
@@ -163,9 +184,12 @@ export async function POST(request: NextRequest) {
         sourceData: item.sourceData || 'UNKNOWN',
         mdCode: item.mdCode || 'UNKNOWN',
         assignedDealerId: assignedDealer?.id ?? null,
-        contactLabel: item.contactStatus || null,
-        progressStatus: item.hasFollowUp || null,
-        prospectStatus: item.notDealReason || null,
+        followedUpAt: item.followedUpAt || undefined,
+        contactStatusLovId: contactStatusLov?.id ?? undefined,
+        notDealReasonLovId: notDealReasonLov?.id ?? undefined,
+        contactLabel: item.contactLabel || undefined,
+        progressStatus: item.progressStatus || undefined,
+        prospectStatus: item.prospectStatus || undefined,
         hasFollowUp: item.hasFollowUp || 'TIDAK',
       },
       create: {
@@ -176,16 +200,54 @@ export async function POST(request: NextRequest) {
         sourceData: item.sourceData || 'UNKNOWN',
         mdCode: item.mdCode || 'UNKNOWN',
         assignedDealerId: assignedDealer?.id ?? null,
-        contactLabel: item.contactStatus || null,
-        progressStatus: item.hasFollowUp || null,
-        prospectStatus: item.notDealReason || null,
+        followedUpAt: item.followedUpAt,
+        contactStatusLovId: contactStatusLov?.id ?? null,
+        notDealReasonLovId: notDealReasonLov?.id ?? null,
+        contactLabel: item.contactLabel,
+        progressStatus: item.progressStatus,
+        prospectStatus: item.prospectStatus,
         hasFollowUp: item.hasFollowUp || 'TIDAK',
       },
     });
+    importedRows += 1;
+    await prisma.importRow.update({
+      where: { id: importRow.id },
+      data: { status: 'IMPORTED', importedEntityId: String(lead.sourceId) },
+    });
+
+    if (item.contactStatus && !contactStatusLov) {
+      await prisma.auditLog.create({
+        data: {
+          batchId: batch.id,
+          importRowId: importRow.id,
+          rowNumber,
+          fieldName: 'status_contact',
+          errorCode: 'UNMAPPED_CONTACT_STATUS_LOV',
+          rawValue: JSON.stringify(item.contactStatus),
+          severity: 'WARNING',
+          action: 'KEEP_UNMAPPED',
+        },
+      });
+    }
+    if (item.notDealReason && !notDealReasonLov) {
+      await prisma.auditLog.create({
+        data: {
+          batchId: batch.id,
+          importRowId: importRow.id,
+          rowNumber,
+          fieldName: 'alasan_not_deal',
+          errorCode: 'UNMAPPED_NOT_DEAL_REASON_LOV',
+          rawValue: JSON.stringify(item.notDealReason),
+          severity: 'WARNING',
+          action: 'KEEP_UNMAPPED',
+        },
+      });
+    }
 
     await prisma.auditLog.create({
       data: {
         batchId: batch.id,
+        importRowId: importRow.id,
         rowNumber,
         fieldName: 'h3_activation_lead',
         errorCode: item.hasFollowUp === 'YA' ? 'H3_FOLLOWUP_YES' : 'H3_FOLLOWUP_NO',
@@ -209,7 +271,7 @@ export async function POST(request: NextRequest) {
     sheetName: targetSheet.sheetName,
     headerMap: mappedHeaders,
     preview: parsedRows,
-    importedRows: parsedRows.length,
+    importedRows,
     warnings: warningCount,
     message: 'H3 activation import berhasil diproses ke tabel domain.',
   });

@@ -10,7 +10,11 @@ export type NormalizedH3ActivationRow = {
   assignedDealerCode: string | null;
   sourceData: string | null;
   contactStatus: string | null;
+  contactLabel: string | null;
+  progressStatus: string | null;
+  prospectStatus: string | null;
   notDealReason: string | null;
+  followedUpAt: Date | null;
   hasFollowUp: string | null;
   raw: Record<string, unknown>;
 };
@@ -33,8 +37,17 @@ const HEADER_ALIASES: Record<string, string> = {
   'source_data': 'source_data',
   'status contact': 'status_contact',
   'status_contact': 'status_contact',
+  'lebel contact': 'contact_label',
+  'label contact': 'contact_label',
+  'lebel_contact': 'contact_label',
+  'progress fu': 'progress_status',
+  'progress_fu': 'progress_status',
+  'prospect status': 'prospect_status',
+  'prospect_status': 'prospect_status',
   'alasan not deal': 'alasan_not_deal',
   'alasan_not_deal': 'alasan_not_deal',
+  'waktu follow up': 'followed_up_at',
+  'waktu_follow_up': 'followed_up_at',
   'identify has fu': 'has_follow_up',
   'identify_has_fu': 'has_follow_up',
 };
@@ -96,7 +109,11 @@ export function normalizeH3ActivationRow(row: H3ActivationSourceRow): Normalized
     assignedDealerCode: normalizeText(row.assigned_dealer ?? row['Assigned Dealer'])?.toUpperCase() ?? null,
     sourceData: normalizeText(row.source_data ?? row['Source Data']),
     contactStatus: normalizeText(row.status_contact ?? row['Status Contact']),
+    contactLabel: normalizeText(row.contact_label ?? row['Lebel Contact'] ?? row['Label Contact']),
+    progressStatus: normalizeText(row.progress_status ?? row['Progress FU']),
+    prospectStatus: normalizeText(row.prospect_status ?? row['Prospect Status']),
     notDealReason: normalizeText(row.alasan_not_deal ?? row['Alasan Not Deal']),
+    followedUpAt: parseDateTime(row.followed_up_at ?? row['Waktu Follow Up']),
     hasFollowUp: normalizeText(row.identify_has_fu ?? row['Identify Has FU'])?.toUpperCase() ?? null,
     raw: { ...row },
   };

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { CrmShell } from '@/component/layout/crm-shell';
+import { CrmShell, useCrmToast } from '@/component/layout/crm-shell';
 import { downloadCsvFile } from '@/lib/crm-data';
 
 type BirthdayCustomer = {
@@ -14,6 +14,8 @@ type BirthdayCustomer = {
 };
 
 type BirthdayFollowUp = {
+  id?: string;
+  customerId?: string;
   name: string;
   phone: string;
   contact: string;
@@ -94,12 +96,15 @@ function PaginationControls({
 }
 
 export function SmartBirthView() {
+  const { showToast } = useCrmToast();
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [bdayPage, setBdayPage] = useState(1);
   const [fuPage, setFuPage] = useState(1);
   const [birthdayCustomers, setBirthdayCustomers] = useState<BirthdayCustomer[]>([]);
   const [fuList, setFuList] = useState<BirthdayFollowUp[]>([]);
   const [loading, setLoading] = useState(true);
+  const [savingFollowUp, setSavingFollowUp] = useState(false);
+  const [followUpForm, setFollowUpForm] = useState({ customerId: '', followUpDate: new Date().toISOString().slice(0, 10), contactStatus: 'Belum dihubungi', dealStatus: 'Belum deal' });
   const pageSize = 10;
 
   useEffect(() => {
@@ -171,6 +176,38 @@ export function SmartBirthView() {
       ['Nama', 'No HP', 'Status Contact', 'Status Deal', 'Tanggal FU'],
       fuList.map((f) => [f.name, f.phone, f.contact, f.deal, f.date])
     );
+  };
+
+  const handleSaveFollowUp = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!followUpForm.customerId) {
+      showToast('warning', 'Pilih konsumen ulang tahun terlebih dahulu.');
+      return;
+    }
+
+    setSavingFollowUp(true);
+    try {
+      const response = await fetch('/api/smartbirth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(followUpForm),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload?.ok || !payload.record) {
+        throw new Error(payload?.message || 'Gagal menyimpan hasil follow-up.');
+      }
+
+      const saved = payload.record as BirthdayFollowUp;
+      setFuList((current) => [saved, ...current.filter((item) => !(item.customerId === saved.customerId && item.date === saved.date))]);
+      setBirthdayCustomers((current) => current.map((customer) => customer.id === saved.customerId
+        ? { ...customer, followUp: { contact: saved.contact, deal: saved.deal } }
+        : customer));
+      showToast('success', `Hasil follow-up ${saved.name} berhasil disimpan.`);
+    } catch (error) {
+      showToast('error', error instanceof Error ? error.message : 'Gagal menyimpan hasil follow-up.');
+    } finally {
+      setSavingFollowUp(false);
+    }
   };
 
   return (
@@ -278,6 +315,42 @@ export function SmartBirthView() {
           <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: '12px 0' }}>
             Conversion <strong>{bfuConvRate}</strong> · Contribution <strong>{bfuContribRate}</strong> · FU count <span>{bfuTotal}</span> · Terhubung <span>{bfuTerhubung}</span> · Deal <span>{bfuDeal}</span>
           </p>
+
+          <form onSubmit={handleSaveFollowUp} className="filter-bar" style={{ alignItems: 'flex-end' }}>
+            <div className="form-group" style={{ flex: '1 1 220px' }}>
+              <label htmlFor="bfuCustomer">Konsumen</label>
+              <select id="bfuCustomer" value={followUpForm.customerId} onChange={(event) => setFollowUpForm((current) => ({ ...current, customerId: event.target.value }))} required>
+                <option value="">Pilih konsumen ulang tahun</option>
+                {birthdayCustomers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name} · {customer.phone}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label htmlFor="bfuDate">Tanggal FU</label>
+              <input id="bfuDate" type="date" value={followUpForm.followUpDate} onChange={(event) => setFollowUpForm((current) => ({ ...current, followUpDate: event.target.value }))} required />
+            </div>
+            <div className="form-group">
+              <label htmlFor="bfuContact">Status Contact</label>
+              <select id="bfuContact" value={followUpForm.contactStatus} onChange={(event) => setFollowUpForm((current) => ({ ...current, contactStatus: event.target.value }))}>
+                <option>Belum dihubungi</option>
+                <option>Terhubung</option>
+                <option>Tidak terhubung</option>
+                <option>WhatsApp dibalas</option>
+                <option>WhatsApp belum dibalas</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label htmlFor="bfuDeal">Status Deal</label>
+              <select id="bfuDeal" value={followUpForm.dealStatus} onChange={(event) => setFollowUpForm((current) => ({ ...current, dealStatus: event.target.value }))}>
+                <option>Belum deal</option>
+                <option>Deal</option>
+                <option>Prospek</option>
+                <option>Not Deal</option>
+              </select>
+            </div>
+            <button type="submit" className="btn-sm primary" disabled={savingFollowUp || birthdayCustomers.length === 0}>
+              <i className={`fas ${savingFollowUp ? 'fa-spinner fa-spin' : 'fa-floppy-disk'}`} aria-hidden="true" /> {savingFollowUp ? 'Menyimpan...' : 'Simpan Hasil FU'}
+            </button>
+          </form>
 
           <h4 style={{ fontWeight: 600, fontSize: '14px', marginBottom: '12px' }}>
             Detail Hasil FU Ulang Tahun{' '}

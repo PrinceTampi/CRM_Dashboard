@@ -12,10 +12,10 @@ const monthOptions = [
   { value: '2026-05', label: 'Mei 2026' },
 ];
 
-const matrixRows = [
+const initialMatrixRows = [
   { metric: 'Data Source Customer', h1_qty: '—', h1_pct: '—', h2_qty: '—', h2_pct: '—' },
-  { metric: 'Penjualan Part (Item)', h1_qty: '—', h1_pct: '—', h2_qty: '—', h2_pct: '—' },
-  { metric: 'Total Revenue Part (Rp)', h1_qty: '—', h1_pct: '—', h2_qty: '—', h2_pct: '—' },
+  { metric: 'Penjualan Part (Item)', h1_qty: 'Belum terpetakan', h1_pct: '—', h2_qty: 'Belum terpetakan', h2_pct: '—' },
+  { metric: 'Total Revenue Part (Rp)', h1_qty: 'Belum terpetakan', h1_pct: '—', h2_qty: 'Belum terpetakan', h2_pct: '—' },
   { metric: 'Prospek Part (Follow Up)', h1_qty: '—', h1_pct: '—', h2_qty: '—', h2_pct: '—' },
   { metric: 'Deal Part Konsumen', h1_qty: '—', h1_pct: '—', h2_qty: '—', h2_pct: '—' },
   { metric: 'Conversion Rate', h1_qty: '—', h1_pct: '—', h2_qty: '—', h2_pct: '—' },
@@ -76,6 +76,9 @@ export function NiguriView() {
   const [totalAct, setTotalAct] = useState(0);
   const [terhubungCount, setTerhubungCount] = useState(0);
   const [dealCount, setDealCount] = useState(0);
+  const [partQuantity, setPartQuantity] = useState(0);
+  const [partRevenue, setPartRevenue] = useState(0);
+  const [matrixRows, setMatrixRows] = useState(initialMatrixRows);
   const [loading, setLoading] = useState(true);
   const pageSize = 10;
 
@@ -93,12 +96,29 @@ export function NiguriView() {
         setTotalAct(Number(payload.totalAct ?? rows.length));
         setTerhubungCount(Number(payload.terhubungCount ?? 0));
         setDealCount(Number(payload.dealCount ?? 0));
+        setPartQuantity(Number(payload.partQuantity ?? 0));
+        setPartRevenue(Number(payload.partRevenue ?? 0));
+        const h1Pipeline = payload.pipelines?.h1ToH3;
+        const h2Pipeline = payload.pipelines?.h2ToH3;
+        const totalPipelineLeads = Number(h1Pipeline?.leads ?? 0) + Number(h2Pipeline?.leads ?? 0);
+        const share = (count: number) => totalPipelineLeads > 0 ? `${((count / totalPipelineLeads) * 100).toFixed(1)}%` : '—';
+        setMatrixRows([
+          { metric: 'Data Source Customer', h1_qty: String(h1Pipeline?.leads ?? 0), h1_pct: share(Number(h1Pipeline?.leads ?? 0)), h2_qty: String(h2Pipeline?.leads ?? 0), h2_pct: share(Number(h2Pipeline?.leads ?? 0)) },
+          initialMatrixRows[1],
+          initialMatrixRows[2],
+          { metric: 'Prospek Part (Follow Up)', h1_qty: String(h1Pipeline?.leads ?? 0), h1_pct: share(Number(h1Pipeline?.leads ?? 0)), h2_qty: String(h2Pipeline?.leads ?? 0), h2_pct: share(Number(h2Pipeline?.leads ?? 0)) },
+          { metric: 'Deal Part Konsumen', h1_qty: String(h1Pipeline?.deals ?? 0), h1_pct: h1Pipeline?.leads ? `${((h1Pipeline.deals / h1Pipeline.leads) * 100).toFixed(1)}%` : '—', h2_qty: String(h2Pipeline?.deals ?? 0), h2_pct: h2Pipeline?.leads ? `${((h2Pipeline.deals / h2Pipeline.leads) * 100).toFixed(1)}%` : '—' },
+          { metric: 'Conversion Rate', h1_qty: '—', h1_pct: h1Pipeline?.leads ? `${((h1Pipeline.deals / h1Pipeline.leads) * 100).toFixed(1)}%` : '—', h2_qty: '—', h2_pct: h2Pipeline?.leads ? `${((h2Pipeline.deals / h2Pipeline.leads) * 100).toFixed(1)}%` : '—' },
+        ]);
       } catch {
         if (active) {
           setActList([]);
           setTotalAct(0);
           setTerhubungCount(0);
           setDealCount(0);
+          setPartQuantity(0);
+          setPartRevenue(0);
+          setMatrixRows(initialMatrixRows);
         }
       } finally {
         if (active) setLoading(false);
@@ -197,10 +217,10 @@ export function NiguriView() {
         </div>
 
         <div className="stats-grid">
-          <NiguriStatCard icon="fa-boxes" value="—" label="Total Part Terjual" tone="teal" />
-          <NiguriStatCard icon="fa-money-bill-wave" value="—" label="Total Penjualan Part" tone="blue" />
-          <NiguriStatCard icon="fa-user-check" value="—" label="Total Prospect" tone="green" />
-          <NiguriStatCard icon="fa-handshake" value="—" label="Deal / Konsumen" tone="orange" />
+          <NiguriStatCard icon="fa-boxes" value={partQuantity.toLocaleString()} label="Total Part Terjual (Qty)" tone="teal" />
+          <NiguriStatCard icon="fa-money-bill-wave" value={`Rp ${partRevenue.toLocaleString('id-ID')}`} label="Total Penjualan Part (Gross)" tone="blue" />
+          <NiguriStatCard icon="fa-user-check" value={totalAct} label="Total Prospect Activation" tone="green" />
+          <NiguriStatCard icon="fa-handshake" value={dealCount} label="Deal / Konsumen" tone="orange" />
         </div>
 
         <div className="card" style={{ marginTop: '16px' }}>

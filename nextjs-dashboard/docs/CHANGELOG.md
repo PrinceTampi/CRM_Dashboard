@@ -2,6 +2,89 @@
 
 Semua perubahan penting pada project dicatat di sini. Setiap entri harus menyertakan perubahan yang dilakukan dan to-do yang masih tersisa.
 
+### 2026-09-28 - Master dealer untuk report Niguri
+
+Perubahan:
+
+- Mengganti daftar dealer hardcoded di Niguri dengan daftar master dealer database beserta kode resminya.
+- Menambahkan endpoint baca master dealer untuk pengguna login dan endpoint Admin untuk menambah dealer.
+- Menambahkan pengelolaan master dealer di Admin Field dengan validasi nama/kode duplikat.
+- Upload Niguri tetap menolak dealer yang belum didaftarkan, sehingga tidak membuat kode dealer hasil tebakan.
+
+Validasi:
+
+- Diagnostik editor bersih.
+- `npm run build` berhasil; route `/api/dealers` dan `/api/admin/dealers` terbentuk.
+
+To-do:
+
+- Admin perlu mendaftarkan AHASS Paal Dua menggunakan kode resmi sebelum dealer tersebut bisa dipilih pada Niguri.
+
+### 2026-09-28 - Perbaikan upload DataProspek berukuran besar
+
+Perubahan:
+
+- Memecah penyimpanan staging `ImportRow` menjadi batch 500 baris agar workbook besar tidak dikirim sebagai satu insert berparameter sangat besar.
+- Menggunakan header map saat membentuk row kanonik sebelum normalisasi.
+- Mengembalikan jumlah `totalRows`, jumlah lead yang benar-benar di-upsert, warning baris tanpa `ID Leads`, dan jumlah duplikasi ID.
+
+Pemeriksaan file contoh `DataProspek (61).xlsx`:
+
+- Sheet `PROSPEK`, 11.060 baris data, header berada di baris pertama.
+- 8.245 baris memiliki `ID Leads`; 2.815 baris tidak memilikinya dan harus dilewati sesuai kontrak primary key wajib.
+- Ditemukan 56 baris dengan ID duplikat; importer mempertahankan upsert berdasarkan ID.
+- File tidak diimpor ke database saat pemeriksaan.
+
+Validasi:
+
+- Test parser DataProspek lulus 3/3.
+- `npm run build` berhasil.
+
+### 2026-09-28 - Upload DMMS Niguri dan bulan data
+
+Perubahan:
+
+- Menghapus kolom Aksi dan tombol Pratinjau dari tabel Pengecekan R.O.
+- Menghubungkan upload DMMS Niguri H1 ke validasi field snapshot dan upsert `NiguriH1Snapshot` berdasarkan dealer, bulan, dan kategori sumber.
+- Menambahkan pemilih bulan data pada report Niguri H1; hasil upload menyegarkan tabel dan export memakai nilai snapshot.
+- Menyimpan bulan yang dipilih pada metadata JSON baris import dan menampilkannya kembali pada riwayat upload tanpa mengubah schema.
+
+Validasi:
+
+- Diagnostik editor pada seluruh file yang disentuh tidak menemukan error.
+- `npm run build` berhasil.
+
+Catatan:
+
+- File upload Niguri harus berisi kolom sesuai kontrak snapshot Niguri H1; header yang belum dikenali ditolak dengan daftar kolom yang kurang.
+- Bulan historis yang terlanjur tersimpan tanpa metadata tidak dapat direkonstruksi otomatis dan tetap tampil sebagai `Tidak tercatat`.
+- Belum ada importer snapshot Niguri H3 atau pembagian nilai transaksi part berdasarkan pipeline.
+
+### 2026-09-28 - Perbaikan gap integrasi lintas modul
+
+Perubahan:
+
+- Menambahkan transaksi H2/H3 ke daftar konsumen terintegrasi dan menentukan sumber/tanggal transaksi terbaru.
+- Menghubungkan pilihan upload H3 Activate dan DataProspek ke endpoint yang telah tersedia, serta menambahkan importer BFU ke tabel follow-up ulang tahun yang sudah ada.
+- Memuat riwayat upload dari `ImportBatch` agar tetap terlihat setelah halaman dimuat ulang.
+- Menyimpan field DataProspek event, platform, status/channel kontak, next follow-up, dan SLA ke model yang tersedia.
+- Memetakan H3 Activate ke kolom status kontak, label kontak, progres, prospek, waktu FU, dan LoV yang sesuai; nilai LoV tak dikenal menghasilkan audit warning.
+- Menambahkan form simpan FU Smart Birth, mengambil Niguri H1 dari snapshot, dan melaporkan kuantitas/nilai part Niguri H3 dari transaksi database.
+- Menghapus fallback sample dari RCR supaya angka contoh tidak tampil sebagai data produksi.
+
+Validasi:
+
+- Test `prospect`, `h3-activate`, dan `rcr-data` lulus.
+- `npm run build` berhasil setelah perubahan integrasi, upload, dan laporan.
+- Tidak mengubah schema/migration dan tidak menjalankan operasi tulis database.
+
+To-do:
+
+- Tetapkan kontrak impor dan alur review Repair Order aktual sebelum membuat importer RO.
+- Sediakan mapping/upload resmi untuk `NiguriH3Snapshot`; metrik yang belum tersimpan tetap ditampilkan sebagai belum tersedia.
+- Tambahkan relasi sumber pipeline pada transaksi part jika penjualan H3 harus dibagi akurat ke H1 to H3 vs H2 to H3.
+- Cocokkan alias header importer Niguri H1 dengan workbook DMMS operasional yang dipakai dealer.
+
 ### 2026-09-18 - R.O otomatis dari histori upload H1
 
 Perubahan:

@@ -7,7 +7,8 @@ import { copySpreadsheetToClipboard, downloadExcelFile } from '@/lib/crm-data';
 
 const months = ['Jan-26', 'Feb-26', 'Mar-26', 'Apr-26', 'May-26', 'Jun-26', 'Jul-26', 'Aug-26'];
 const h1Metrics = ['Total Penjualan Part (Rp)', 'Analysis By', 'Data Filtering', 'SMS/WA Sent', 'Interest (M)', 'Workload from (M-1)', 'Prospect Customer (M-2)', 'Prospect Customer (M-1)', 'Total Data Di Follow Up', 'Contacted by Phone', 'Unreachable', 'Rejected', 'Workload', 'Total Prospect', 'Deal / Konsumen', 'Hot Prospect', 'Low Prospect', 'Not Deal', 'Penjualan Part (Rp)', 'Penjualan Part / Konsumen (Rp)', 'Penjualan Part / Total Penjualan Part (Rp)'];
-const dealerOptions = ['AHASS Malalayang', 'AHASS Kombos', 'AHASS Paal Dua'];
+
+type DealerOption = { id: string; code: string; name: string };
 
 type SpreadsheetCell = { value?: string | number; colSpan?: number; rowSpan?: number; className?: string; backgroundColor?: string };
 
@@ -66,24 +67,28 @@ const h1MetricRows = (label: string, cells: SpreadsheetCell[] = []): Spreadsheet
 type H1ReportData = {
   totalDataSource: number;
   totalDataAnalysisResult: number;
+  totalDataFollowupPhone: number;
   totalProspect: number;
   totalCustomerDeal: number;
   totalUnitSold: number;
+  hasSnapshot: boolean;
 };
 
-function buildH1Rows(data: H1ReportData): SpreadsheetCell[][] {
-  const rows: SpreadsheetCell[][] = [h1Month('Jan-25'), h1GroupHeader()];
-  rows.push(h1MetricRows('Total Data Source ', [value(data.totalDataSource, 4)]));
-  rows.push(h1MetricRows('Total Data Based On\nAnalysis Result', [value(data.totalDataAnalysisResult, 4)]));
-  rows.push(h1MetricRows('Attention by SMS', h1SourceGroups.flatMap(() => [value(0, 2), value(0, 2)]).concat(h1SourceGroups.flatMap(() => [value(0, 2), value(0, 2)]))));
-  rows.push(h1MetricRows('', [blank(3), value(0), blank(2), value(0), value(0), blank(3), value(0), blank(3), value(0), blank(3), value(0), blank(2), value(0)]));
-  rows.push(h1MetricRows('Workload from (M-1)', [value(0, 4), value(0, 4), value(0, 4), value(0, 4), value(0, 4), value(0, 4)]));
-  rows.push(h1MetricRows('total data that must be followed Up by Phone'));
+function buildH1Rows(data: H1ReportData, monthLabel: string): SpreadsheetCell[][] {
+  const total = (count: number) => value(data.hasSnapshot ? count : '—', 24);
+  const unavailableByGroup = h1SourceGroups.flatMap(() => [value('—', 2), value('—', 2)]).concat(h1SourceGroups.flatMap(() => [value('—', 2), value('—', 2)]));
+  const rows: SpreadsheetCell[][] = [h1Month(monthLabel), h1GroupHeader()];
+  rows.push(h1MetricRows('Total Data Source ', [total(data.totalDataSource)]));
+  rows.push(h1MetricRows('Total Data Based On\nAnalysis Result', [total(data.totalDataAnalysisResult)]));
+  rows.push(h1MetricRows('Attention by SMS', unavailableByGroup));
+  rows.push(h1MetricRows('', [blank(3), value('—'), blank(2), value('—'), value('—'), blank(3), value('—'), blank(3), value('—'), blank(3), value('—'), blank(2), value('—')]));
+  rows.push(h1MetricRows('Workload from (M-1)', Array.from({ length: 6 }, () => value('—', 4))));
+  rows.push(h1MetricRows('total data that must be followed Up by Phone', [total(data.totalDataFollowupPhone)]));
   rows.push(h1MetricRows('Follow up by Call ', h1SourceGroups.flatMap(() => [value('Contacted', 2), value('Not Contacted', 2)]).concat(h1SourceGroups.flatMap(() => [value('Contacted', 2), value('Not Contacted', 2)]))));
-  rows.push(h1MetricRows('', h1SourceGroups.flatMap(() => [blank(), value('unreachable'), value('rejected'), value('workload')]).concat(h1SourceGroups.flatMap(() => [blank(), value('unreachable'), value('rejected'), value('workload')]))));
-  rows.push(h1MetricRows('Total Prospect', h1SourceGroups.flatMap(() => [value(data.totalProspect), value(0), value(0), value(0)]).concat(h1SourceGroups.flatMap(() => [value(data.totalProspect), value(0), value(0), value(0)]))));
-  rows.push(h1MetricRows('Total Customer Result\nFrom Direct Touch', h1SourceGroups.flatMap(() => [value(data.totalCustomerDeal), value(0), value(0), value(Math.max(data.totalProspect - data.totalCustomerDeal, 0))]).concat(h1SourceGroups.flatMap(() => [value(data.totalCustomerDeal), value(0), value(0), value(Math.max(data.totalProspect - data.totalCustomerDeal, 0))]))));
-  rows.push(h1MetricRows('Total Unit Sold  Result\nFrom Direct Touch', [value(data.totalUnitSold, 4)]));
+  rows.push(h1MetricRows('', h1SourceGroups.flatMap(() => [blank(), value('—'), value('—'), value('—')]).concat(h1SourceGroups.flatMap(() => [blank(), value('—'), value('—'), value('—')]))));
+  rows.push(h1MetricRows('Total Prospect', [total(data.totalProspect)]));
+  rows.push(h1MetricRows('Total Customer Result\nFrom Direct Touch', [total(data.totalCustomerDeal)]));
+  rows.push(h1MetricRows('Total Unit Sold  Result\nFrom Direct Touch', [total(data.totalUnitSold)]));
   rows.push(h1MetricRows('Tracking Data pending'));
   rows.push(h1MetricRows('Contacted by Direct Touch'));
   rows.push(h1MetricRows('Analysis'));
@@ -126,25 +131,99 @@ function addMonths(date: string, monthsToAdd: number) {
 export function NiguriReportView({ initialTab = 'h1' }: { initialTab?: 'h1' | 'h2' | 'h3' }) {
   const { showToast } = useCrmToast();
   const [tab, setTab] = useState<'h1' | 'h2' | 'h3'>(initialTab);
-  const [dealer, setDealer] = useState(dealerOptions[0]);
-  const [h1Data, setH1Data] = useState<H1ReportData>({ totalDataSource: 0, totalDataAnalysisResult: 0, totalProspect: 0, totalCustomerDeal: 0, totalUnitSold: 0 });
-  const [dmmsFile, setDmmsFile] = useState('');
-  const [invoiceDate, setInvoiceDate] = useState('2026-01-15');
+  const [dealers, setDealers] = useState<DealerOption[]>([]);
+  const [dealer, setDealer] = useState('');
+  const [dealersLoading, setDealersLoading] = useState(true);
+  const [dealerLoadError, setDealerLoadError] = useState('');
+  const [h1Data, setH1Data] = useState<H1ReportData>({ totalDataSource: 0, totalDataAnalysisResult: 0, totalDataFollowupPhone: 0, totalProspect: 0, totalCustomerDeal: 0, totalUnitSold: 0, hasSnapshot: false });
+  const [h1Loading, setH1Loading] = useState(true);
+  const [dmmsFile, setDmmsFile] = useState<File | null>(null);
+  const [uploadingDmms, setUploadingDmms] = useState(false);
+  const [dmmsMessage, setDmmsMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let active = true;
-    fetch(`/api/niguri/h1?dealer=${encodeURIComponent(dealer)}&month=${invoiceDate.slice(0, 7)}`, { cache: 'no-store' })
+    fetch('/api/dealers', { cache: 'no-store' })
+      .then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok || !payload?.ok) throw new Error(payload?.message || 'Master dealer gagal dimuat.');
+        if (!active) return;
+        const rows = (payload.dealers ?? []) as DealerOption[];
+        setDealers(rows);
+        setDealer((current) => rows.some((item) => item.name === current) ? current : rows[0]?.name ?? '');
+      })
+      .catch((error) => {
+        if (active) setDealerLoadError(error instanceof Error ? error.message : 'Master dealer gagal dimuat.');
+      })
+      .finally(() => { if (active) setDealersLoading(false); });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    setH1Loading(true);
+    if (!dealer) {
+      setH1Data({ totalDataSource: 0, totalDataAnalysisResult: 0, totalDataFollowupPhone: 0, totalProspect: 0, totalCustomerDeal: 0, totalUnitSold: 0, hasSnapshot: false });
+      setH1Loading(false);
+      return () => { active = false; };
+    }
+
+    fetch(`/api/niguri/h1?dealer=${encodeURIComponent(dealer)}&month=${selectedMonth}`, { cache: 'no-store' })
       .then((response) => response.json())
       .then((payload) => { if (active) setH1Data(payload); })
-      .catch(() => { if (active) setH1Data({ totalDataSource: 0, totalDataAnalysisResult: 0, totalProspect: 0, totalCustomerDeal: 0, totalUnitSold: 0 }); });
+      .catch(() => {
+        if (active) setH1Data({ totalDataSource: 0, totalDataAnalysisResult: 0, totalDataFollowupPhone: 0, totalProspect: 0, totalCustomerDeal: 0, totalUnitSold: 0, hasSnapshot: false });
+      })
+      .finally(() => { if (active) setH1Loading(false); });
     return () => { active = false; };
-  }, [dealer, invoiceDate]);
+  }, [dealer, selectedMonth, refreshKey]);
 
-  const h1Rows = [['Nama Dealer', dealer], ['MONTH', ...months], ['Data Source H2 to H1'], ...h1Metrics.map((metric) => [metric, '0'])];
+  const h1MetricsByName: Record<string, number | string> = {
+    'Total Data Source': h1Data.totalDataSource,
+    'Total Data Based On Analysis Result': h1Data.totalDataAnalysisResult,
+    'Total Data Di Follow Up': h1Data.totalDataFollowupPhone,
+    'Total Prospect': h1Data.totalProspect,
+    'Deal / Konsumen': h1Data.totalCustomerDeal,
+    'Total Unit Sold': h1Data.totalUnitSold,
+  };
+  const h1Rows = [['Nama Dealer', dealer], ['MONTH', selectedMonth], ['Data Source H2 to H1'], ...h1Metrics.map((metric) => [metric, h1Data.hasSnapshot ? h1MetricsByName[metric] ?? '—' : '—'])];
   const h3Rows = [['Nama Dealer', dealer], ['YEAR', 'Belum tersedia'], ['MONTH', ...months], ['Metric', 'H1 to H3', 'H2 to H3'], ...['Total Penjualan Part (Rp)', 'SMS/WA Sent', 'Interest (M)', 'Total Prospect', 'Deal / Konsumen', 'Penjualan Part / Konsumen (Rp)'].map((metric) => [metric, '—', '—'])];
-  const h1Clipboard = () => spreadsheetRowsToClipboard(buildH1Rows(h1Data), 26);
+  const monthLabel = new Date(`${selectedMonth}-01T00:00:00`).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+  const h1Clipboard = () => spreadsheetRowsToClipboard(buildH1Rows(h1Data, monthLabel), 26);
   const h3Clipboard = () => spreadsheetRowsToClipboard(buildH3Rows(dealer), 50);
   const downloadReport = () => downloadExcelFile(`Report_Niguri_${dealer.replaceAll(' ', '_')}.xlsx`, [{ name: 'Niguri H1', rows: h1Rows }, { name: 'Niguri H3', rows: h3Rows }]);
+
+  const handleDmmsUpload = async () => {
+    if (!dmmsFile) {
+      showToast('warning', 'Pilih file DMMS terlebih dahulu.');
+      return;
+    }
+    setUploadingDmms(true);
+    setDmmsMessage(null);
+    const formData = new FormData();
+    formData.append('file', dmmsFile);
+    formData.append('dealer', dealer);
+    formData.append('month', selectedMonth);
+
+    try {
+      const response = await fetch('/api/niguri/h1', { method: 'POST', body: formData });
+      const payload = await response.json();
+      if (!response.ok || !payload?.ok) throw new Error(payload?.message || 'Upload DMMS gagal diproses.');
+      const message = `${payload.message} Dealer: ${dealer}; bulan: ${selectedMonth}.`;
+      setDmmsMessage({ type: 'success', text: message });
+      setDmmsFile(null);
+      setRefreshKey((current) => current + 1);
+      showToast('success', message);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Upload DMMS gagal diproses.';
+      setDmmsMessage({ type: 'error', text: message });
+      showToast('error', message);
+    } finally {
+      setUploadingDmms(false);
+    }
+  };
 
   const copySheetRows = async (headers: string[], rows: (string | number)[][]) => {
     try {
@@ -168,10 +247,28 @@ export function NiguriReportView({ initialTab = 'h1' }: { initialTab?: 'h1' | 'h
   return <CrmShell title="Report Niguri" crumb="Service & Part">
     <div className="tab-content" style={{ display: 'block' }}>
       <div className="page-heading"><h2>Report Niguri</h2><p>Report H1 dan H3 dengan format matriks dealer dan export Excel.</p></div>
-      <div className="filter-bar"><label htmlFor="niguriDealer">Nama Dealer</label><select id="niguriDealer" value={dealer} onChange={(e) => setDealer(e.target.value)}>{dealerOptions.map((option) => <option key={option}>{option}</option>)}</select><label htmlFor="niguriDmms">Upload DMMS H1</label><input id="niguriDmms" type="file" accept=".xlsx,.xls,.csv" onChange={(e) => setDmmsFile(e.target.files?.[0]?.name || '')} /><button type="button" className="btn-download" onClick={downloadReport}><i className="fas fa-file-excel" aria-hidden="true" /> Download Excel Niguri</button></div>
-      {dmmsFile && <div className="kpi-hint"><i className="fas fa-check-circle" aria-hidden="true" /> DMMS siap dipakai dalam report H1: {dmmsFile}</div>}
+      <div className="filter-bar">
+        <label htmlFor="niguriDealer">Nama Dealer</label>
+        <select id="niguriDealer" value={dealer} onChange={(e) => setDealer(e.target.value)} disabled={dealersLoading || dealers.length === 0}>
+          {dealers.length === 0 && <option value="">{dealersLoading ? 'Memuat master dealer...' : 'Belum ada dealer di master'}</option>}
+          {dealers.map((option) => <option key={option.id} value={option.name}>{option.name} ({option.code})</option>)}
+        </select>
+        <label htmlFor="niguriMonth">Bulan Data</label>
+        <input id="niguriMonth" type="month" value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)} />
+        <label htmlFor="niguriDmms">Upload DMMS H1</label>
+        <input id="niguriDmms" type="file" accept=".xlsx,.xls,.csv" onChange={(e) => setDmmsFile(e.target.files?.[0] ?? null)} />
+        <button type="button" className="btn-sm primary" onClick={handleDmmsUpload} disabled={!dmmsFile || !dealer || uploadingDmms}>
+          <i className={`fas ${uploadingDmms ? 'fa-spinner fa-spin' : 'fa-upload'}`} aria-hidden="true" /> {uploadingDmms ? 'Memproses...' : 'Upload DMMS'}
+        </button>
+        <button type="button" className="btn-download" onClick={downloadReport}><i className="fas fa-file-excel" aria-hidden="true" /> Download Excel Niguri</button>
+      </div>
+      {dealerLoadError && <div className="kpi-hint danger" role="alert">{dealerLoadError}</div>}
+      {!dealersLoading && dealers.length === 0 && !dealerLoadError && <div className="kpi-hint" role="status">Belum ada dealer di master. Minta Admin menambahkan kode dan nama resmi dealer terlebih dahulu.</div>}
+      {dmmsFile && <div className="kpi-hint"><i className="fas fa-file-excel" aria-hidden="true" /> File dipilih: {dmmsFile.name}</div>}
+      {dmmsMessage && <div className={`kpi-hint ${dmmsMessage.type === 'error' ? 'danger' : ''}`} role={dmmsMessage.type === 'error' ? 'alert' : 'status'}>{dmmsMessage.text}</div>}
+      {tab === 'h1' && <div className="kpi-hint" role="status">{h1Loading ? 'Memuat snapshot Niguri H1...' : h1Data.hasSnapshot ? `Snapshot Niguri H1 tersedia untuk ${dealer} periode ${selectedMonth}.` : `Belum ada snapshot Niguri H1 untuk ${dealer} periode ${selectedMonth}.`}</div>}
       <div className="filter-bar"><Link href="/niguri/h1" className={`btn-sm ${tab === 'h1' ? 'primary' : ''}`}>Niguri H1</Link><Link href="/niguri/h3" className={`btn-sm ${tab === 'h3' ? 'primary' : ''}`}>Niguri H3</Link></div>
-      {tab === 'h1' && <div className="card niguri-format-card"><h3>Format Niguri H1 <span className="badge info">{dealer}</span><button type="button" className="btn-download" onClick={handleCopyH1} style={{ marginLeft: '12px' }}><i className="fas fa-copy" aria-hidden="true" /> Copy Sheet</button></h3><SpreadsheetGrid rows={buildH1Rows(h1Data)} columnCount={26} className="niguri-h1-sheet" /></div>}
+      {tab === 'h1' && <div className="card niguri-format-card"><h3>Format Niguri H1 <span className="badge info">{dealer}</span><button type="button" className="btn-download" onClick={handleCopyH1} style={{ marginLeft: '12px' }}><i className="fas fa-copy" aria-hidden="true" /> Copy Sheet</button></h3><SpreadsheetGrid rows={buildH1Rows(h1Data, monthLabel)} columnCount={26} className="niguri-h1-sheet" /></div>}
       {tab === 'h3' && <div className="card niguri-format-card"><h3>Format Niguri H3 - Parts dan Conversion<button type="button" className="btn-download" onClick={handleCopyH3} style={{ marginLeft: '12px' }}><i className="fas fa-copy" aria-hidden="true" /> Copy Sheet</button></h3><SpreadsheetGrid rows={buildH3Rows(dealer)} columnCount={50} className="niguri-h3-sheet" /></div>}
     </div>
   </CrmShell>;

@@ -65,6 +65,7 @@ function normalizeCustomerName(value: string | null): string {
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const file = formData.get('file');
+  const sourceMonth = String(formData.get('month') ?? '').trim() || null;
   const importType = resolveH23ImportType(String(formData.get('type') ?? ''));
 
   if (!(file instanceof File)) {
@@ -126,6 +127,7 @@ export async function POST(request: NextRequest) {
           rawData: safeRawJson({
             row: item.raw,
             headerMap: mappedHeaders,
+            sourceMonth,
           }) as any,
           status: item.transactionType && validateH23ImportType(importType, item.transactionType) && validateH23RowContract(importType, item) ? 'VALID' : 'WARNING',
           importedEntity: 'h23-entity',

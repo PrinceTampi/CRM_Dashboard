@@ -25,7 +25,9 @@ const uploadTypeOptions: UploadTypeOption[] = [
   { value: 'H1', label: 'H1 - Penjualan', buttonLabel: 'Upload', buttonTone: 'primary' },
   { value: 'H2', label: 'H2 - Hasil FU (Service)', buttonLabel: 'Upload FU (H2)', buttonTone: 'navy' },
   { value: 'H3', label: 'H3 - Sparepart', buttonLabel: 'Upload FU (H3)', buttonTone: 'blue' },
+  { value: 'H3_ACTIVATE', label: 'H3 Activate - Follow-up', buttonLabel: 'Upload H3 Activate', buttonTone: 'blue' },
   { value: 'LCR', label: 'LCR - Campaign', buttonLabel: 'Upload LCR', buttonTone: 'primary' },
+  { value: 'PROSPECT', label: 'DataProspek - Pipeline', buttonLabel: 'Upload Prospek', buttonTone: 'navy' },
   { value: 'BFU', label: 'FU Ulang Tahun (Compare Deal)', buttonLabel: 'Upload BFU', buttonTone: 'navy' },
 ];
 
@@ -37,6 +39,12 @@ function getUploadEndpoint(type: string) {
       return '/api/upload/h1';
     case 'LCR':
       return '/api/upload/lcr';
+    case 'H3_ACTIVATE':
+      return '/api/upload/h3-activate';
+    case 'PROSPECT':
+      return '/api/upload/prospect';
+    case 'BFU':
+      return '/api/upload/bfu';
     case 'H2':
     case 'H3':
     default:
@@ -176,12 +184,14 @@ function ActionButton({
   onClick,
   icon,
   disabled = false,
+  loading = false,
 }: {
   label: string;
   tone: ActionButtonTone;
   onClick: () => void;
   icon: string;
   disabled?: boolean;
+  loading?: boolean;
 }) {
   const buttonStyles: Record<ActionButtonTone, { background: string; color: string }> = {
     primary: { background: '#CC0000', color: '#fff' },
@@ -195,21 +205,21 @@ function ActionButton({
       type="button"
       className="btn-submit"
       onClick={onClick}
-      disabled={disabled}
+      disabled={disabled || loading}
       style={{
         ...buttonStyles[tone],
         padding: '10px 18px',
         border: 'none',
         borderRadius: '6px',
         fontWeight: 600,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.7 : 1,
+        cursor: disabled || loading ? 'not-allowed' : 'pointer',
+        opacity: disabled || loading ? 0.72 : 1,
         display: 'inline-flex',
         alignItems: 'center',
         gap: '6px',
       }}
     >
-      <i className={`fas ${icon}`} aria-hidden="true" /> {label}
+      <i className={`fas ${loading ? 'fa-spinner fa-spin' : icon}`} aria-hidden="true" /> {loading ? 'Memproses...' : label}
     </button>
   );
 }
@@ -249,6 +259,9 @@ export function UploadView() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [isRunningIntegration, setIsRunningIntegration] = useState(false);
+  const [isDownloadingCsv, setIsDownloadingCsv] = useState(false);
+  const [actionStatus, setActionStatus] = useState<{ type: 'success' | 'error' | 'warning' | 'info'; message: string } | null>(null);
 
   const [integratedData, setIntegratedData] = useState<IntegratedRecord[]>([]);
   const [integrationSummary, setIntegrationSummary] = useState<IntegrationSummary>({
@@ -292,6 +305,15 @@ export function UploadView() {
     };
 
     loadIntegration();
+
+    void safeFetchJson<{ rows: UploadHistoryRecord[] }>(
+      '/api/upload/history',
+      { cache: 'no-store' },
+      { rows: [] },
+    ).then(({ data }) => {
+      if (active) setHistory(data?.rows ?? []);
+    });
+
     return () => {
       active = false;
     };
@@ -344,6 +366,7 @@ export function UploadView() {
 
     const formData = new FormData();
     formData.append('file', selectedFile);
+    formData.append('month', selectedMonth);
 
     if (type !== 'H1') {
       formData.append('type', type);
@@ -377,6 +400,12 @@ export function UploadView() {
       };
 
       setHistory((current) => [newRecord, ...current]);
+      const historyResult = await safeFetchJson<{ rows: UploadHistoryRecord[] }>(
+        '/api/upload/history',
+        { cache: 'no-store' },
+        { rows: [] },
+      );
+      if (!historyResult.error) setHistory(historyResult.data?.rows ?? []);
       const importedRows = typeof payload.importedRows === 'number' ? payload.importedRows : count;
       const updatedRows = typeof payload.updatedSales === 'number' ? payload.updatedSales : 0;
       const warnings = typeof payload.warnings === 'number' ? payload.warnings : 0;
@@ -398,6 +427,20 @@ export function UploadView() {
   };
 
   const handleRunIntegration = async () => {
+    if (!canRunIntegration) {
+      const warningMessage = 'Belum ada data yang bisa diintegrasikan. Silakan upload file terlebih dahulu.';
+      setActionStatus({ type: 'warning', message: warningMessage });
+      showToast('warning', warningMessage);
+      return;
+    }
+
+    if (isRunningIntegration) {
+      return;
+    }
+
+    setIsRunningIntegration(true);
+    setActionStatus({ type: 'info', message: 'Integrasi data sedang berjalan. Mohon tunggu...' });
+
     try {
       const { data, error } = await safeFetchJson<{ rows: IntegratedRecord[]; summary?: IntegrationSummary }>(
         '/api/integration',
@@ -416,9 +459,16 @@ export function UploadView() {
         completeCustomers: 0,
         incompleteCustomers: rows.length,
       });
-      showToast('success', `Integrasi berhasil diselesaikan! ${rows.length} data konsumen terhubung lintas sistem AHASS, H1, H2, dan H3.`);
+
+      const successMessage = `Integrasi berhasil diselesaikan! ${rows.length} data konsumen terhubung lintas sistem AHASS, H1, H2, dan H3.`;
+      setActionStatus({ type: 'success', message: successMessage });
+      showToast('success', successMessage);
     } catch (error) {
-      showToast('error', getClientErrorMessage(error, 'Integrasi gagal dimuat. Silakan coba lagi.'));
+      const message = getClientErrorMessage(error, 'Integrasi gagal dimuat. Silakan coba lagi.');
+      setActionStatus({ type: 'error', message });
+      showToast('error', message);
+    } finally {
+      setIsRunningIntegration(false);
     }
   };
 
@@ -434,15 +484,38 @@ export function UploadView() {
 
   const handleDownloadIntegrated = () => {
     if (integratedData.length === 0) {
-      showToast('warning', 'Jalankan integrasi terlebih dahulu untuk menghasilkan data.');
+      const warningMessage = 'Jalankan integrasi terlebih dahulu untuk menghasilkan data.';
+      setActionStatus({ type: 'warning', message: warningMessage });
+      showToast('warning', warningMessage);
       return;
     }
 
-    downloadCsvFile(
-      'Data_Konsumen_Terintegrasi.csv',
-      ['Nama', 'No HP', 'No Mesin', 'Sumber Data', 'Tanggal'],
-      integratedData.map((item) => [item.name, item.phone, item.engine, item.source, item.date])
-    );
+    if (isDownloadingCsv) {
+      return;
+    }
+
+    setIsDownloadingCsv(true);
+    const infoMessage = 'Membuat file CSV hasil integrasi...';
+    setActionStatus({ type: 'info', message: infoMessage });
+    showToast('info', infoMessage);
+
+    try {
+      downloadCsvFile(
+        'Data_Konsumen_Terintegrasi.csv',
+        ['Nama', 'No HP', 'No Mesin', 'Sumber Data', 'Tanggal'],
+        integratedData.map((item) => [item.name, item.phone, item.engine, item.source, item.date])
+      );
+
+      const successMessage = `${integratedData.length} data konsumen berhasil diunduh ke file CSV.`;
+      setActionStatus({ type: 'success', message: successMessage });
+      showToast('success', successMessage);
+    } catch (error) {
+      const message = getClientErrorMessage(error, 'Download CSV gagal. Silakan coba lagi.');
+      setActionStatus({ type: 'error', message });
+      showToast('error', message);
+    } finally {
+      setIsDownloadingCsv(false);
+    }
   };
 
   const selectedTypeLabel = uploadTypeOptions.find((option) => option.value === selectedType)?.label ?? selectedType;
@@ -535,10 +608,48 @@ export function UploadView() {
               tone="navy"
               icon="fa-sync-alt"
               disabled={!canRunIntegration}
+              loading={isRunningIntegration}
               onClick={handleRunIntegration}
             />
-            <ActionButton label="Download CSV" tone="green" icon="fa-download" onClick={handleDownloadIntegrated} />
+            <ActionButton
+              label="Download CSV"
+              tone="green"
+              icon="fa-download"
+              disabled={integratedData.length === 0}
+              loading={isDownloadingCsv}
+              onClick={handleDownloadIntegrated}
+            />
           </div>
+
+          {actionStatus && (
+            <div
+              role="status"
+              aria-live="polite"
+              style={{
+                marginTop: '12px',
+                marginBottom: '12px',
+                padding: '10px 12px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: 600,
+                border: '1px solid',
+                background:
+                  actionStatus.type === 'success' ? '#DCFCE7' :
+                  actionStatus.type === 'error' ? '#FEE2E2' :
+                  actionStatus.type === 'warning' ? '#FEF3C7' : '#DBEAFE',
+                borderColor:
+                  actionStatus.type === 'success' ? '#22C55E' :
+                  actionStatus.type === 'error' ? '#EF4444' :
+                  actionStatus.type === 'warning' ? '#F59E0B' : '#3B82F6',
+                color:
+                  actionStatus.type === 'success' ? '#166534' :
+                  actionStatus.type === 'error' ? '#991B1B' :
+                  actionStatus.type === 'warning' ? '#92400E' : '#1E3A8A',
+              }}
+            >
+              {actionStatus.message}
+            </div>
+          )}
 
           <h4 style={{ fontWeight: 600, fontSize: '14px', margin: '16px 0 12px' }}>
             <i className="fas fa-table" aria-hidden="true" /> Data Terintegrasi{' '}

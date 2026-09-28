@@ -67,6 +67,7 @@ async function readH1Rows(file: File): Promise<string[][]> {
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const file = formData.get('file');
+  const sourceMonth = String(formData.get('month') ?? '').trim() || null;
 
   if (!(file instanceof File)) {
     return NextResponse.json({ ok: false, message: 'File wajib diunggah.' }, { status: 400 });
@@ -110,6 +111,7 @@ export async function POST(request: NextRequest) {
           rawData: safeRawJson({
             row: item.raw,
             headerMap: mappedHeaders,
+            sourceMonth,
           }) as any,
           status: 'VALID',
           importedEntity: 'h1-preview',

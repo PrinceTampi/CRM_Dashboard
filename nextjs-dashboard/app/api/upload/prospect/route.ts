@@ -61,6 +61,7 @@ function normalizeDealerCode(value: string | null): string {
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const file = formData.get('file');
+  const sourceMonth = String(formData.get('month') ?? '').trim() || null;
 
   if (!(file instanceof File)) {
     return NextResponse.json({ ok: false, message: 'File wajib diunggah.' }, { status: 400 });
@@ -87,7 +88,10 @@ export async function POST(request: NextRequest) {
 
   const parsedRows = dataRows
     .map((row) => {
-      const normalized = Object.fromEntries((headerRow || []).map((header, index) => [header, row[index] ?? '']));
+      const normalized = Object.fromEntries((headerRow || []).map((header, index) => [
+        mappedHeaders[String(header ?? '').trim().toLowerCase()] ?? header,
+        row[index] ?? '',
+      ]));
       return normalizeProspectRow(normalized);
     })
     .filter((row) => row.leadId || row.customerName || row.phone);
@@ -98,29 +102,44 @@ export async function POST(request: NextRequest) {
       fileType: file.type || 'application/vnd.ms-excel',
       status: 'PROCESSING',
       uploadedById: adminUser.id,
-      rows: {
-        create: parsedRows.map((item, index) => ({
-          sheetName: targetSheet.sheetName,
-          rowNumber: index + 2,
-          rawData: safeRawJson({ row: item.raw, headerMap: mappedHeaders }) as any,
-          status: item.leadId ? 'VALID' : 'WARNING',
-          importedEntity: 'prospect-lead',
-          errorMessage: item.leadId ? null : 'MISSING_LEAD_ID',
-        })),
-      },
     },
   });
 
+  const importRowChunkSize = 500;
+  for (let start = 0; start < parsedRows.length; start += importRowChunkSize) {
+    const chunk = parsedRows.slice(start, start + importRowChunkSize);
+    await prisma.importRow.createMany({
+      data: chunk.map((item, offset) => ({
+          batchId: batch.id,
+          sheetName: targetSheet.sheetName,
+          rowNumber: start + offset + 2,
+          rawData: safeRawJson({ row: item.raw, headerMap: mappedHeaders, sourceMonth }) as any,
+          status: item.leadId ? 'VALID' : 'WARNING',
+          importedEntity: 'prospect-lead',
+          errorMessage: item.leadId ? null : 'MISSING_LEAD_ID',
+      })),
+    });
+  }
+  const importRows = await prisma.importRow.findMany({
+    where: { batchId: batch.id },
+    orderBy: { rowNumber: 'asc' },
+  });
+
   let warningCount = 0;
+  let importedRows = 0;
+  const seenLeadIds = new Set<string>();
+  let duplicateRows = 0;
 
   for (const [index, item] of parsedRows.entries()) {
     const rowNumber = index + 2;
+    const importRow = importRows[index];
 
     if (!item.leadId) {
       warningCount += 1;
       await prisma.auditLog.create({
         data: {
           batchId: batch.id,
+          importRowId: importRow.id,
           rowNumber,
           fieldName: 'lead_id',
           errorCode: 'MISSING_LEAD_ID',
@@ -131,6 +150,9 @@ export async function POST(request: NextRequest) {
       });
       continue;
     }
+
+    if (seenLeadIds.has(item.leadId)) duplicateRows += 1;
+    seenLeadIds.add(item.leadId);
 
     const assignedDealer = item.assignedDealerCode ? await prisma.dealer.upsert({
       where: { code: normalizeDealerCode(item.assignedDealerCode) },
@@ -154,13 +176,20 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    await prisma.prospectLead.upsert({
+    const lead = await prisma.prospectLead.upsert({
       where: { leadId: item.leadId },
       update: {
         guestbookId: item.guestbookId || null,
         guestbookAt: item.guestbookAt || null,
         customerId: customer?.id ?? null,
         salesChannel: item.salesChannel || null,
+        eventCode: item.eventCode || null,
+        eventDescription: item.eventDescription || null,
+        platform: item.platform || null,
+        contactStatus: item.contactStatus || null,
+        contactChannel: item.contactChannel || null,
+        nextFollowUp: item.nextFollowUp || null,
+        slaDeadline: item.slaDeadline || null,
         prospectType: item.prospectType || null,
         customerType: item.customerType || null,
         assignedDealerId: assignedDealer?.id ?? null,
@@ -172,16 +201,25 @@ export async function POST(request: NextRequest) {
         guestbookAt: item.guestbookAt || null,
         customerId: customer?.id ?? null,
         salesChannel: item.salesChannel || null,
+        eventCode: item.eventCode || null,
+        eventDescription: item.eventDescription || null,
+        platform: item.platform || null,
+        contactStatus: item.contactStatus || null,
+        contactChannel: item.contactChannel || null,
+        nextFollowUp: item.nextFollowUp || null,
+        slaDeadline: item.slaDeadline || null,
         prospectType: item.prospectType || null,
         customerType: item.customerType || null,
         assignedDealerId: assignedDealer?.id ?? null,
         status: item.status || 'NEW',
       },
     });
+    importedRows += 1;
 
     await prisma.auditLog.create({
       data: {
         batchId: batch.id,
+        importRowId: importRow.id,
         rowNumber,
         fieldName: 'prospect_lead',
         errorCode: 'PROSPECT_UPSERTED',
@@ -189,6 +227,10 @@ export async function POST(request: NextRequest) {
         severity: 'INFO',
         action: 'IMPORT_ROW',
       },
+    });
+    await prisma.importRow.update({
+      where: { id: importRow.id },
+      data: { status: 'IMPORTED', importedEntityId: lead.leadId },
     });
   }
 
@@ -205,8 +247,10 @@ export async function POST(request: NextRequest) {
     sheetName: targetSheet.sheetName,
     headerMap: mappedHeaders,
     preview: parsedRows,
-    importedRows: parsedRows.length,
+    totalRows: parsedRows.length,
+    importedRows,
     warnings: warningCount,
+    duplicateRows,
     message: 'Prospect pipeline import berhasil diproses ke tabel domain.',
   });
 }

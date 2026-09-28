@@ -146,19 +146,19 @@ export function PortalOverview() {
             <table>
               <thead>
                 <tr>
-                  <th>No.</th><th>Nilai Cocok</th><th>Nama</th><th>NIK</th><th>Nomor KK</th><th>No. Telepon</th><th>Jumlah Data</th><th>Periode</th><th>Aksi</th>
+                  <th>No.</th><th>Nilai Cocok</th><th>Nama</th><th>NIK</th><th>Nomor KK</th><th>No. Telepon</th><th>Jumlah Data</th><th>Periode</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={11} style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '18px' }}>
+                    <td colSpan={8} style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '18px' }}>
                       Memuat data Repair Order...
                     </td>
                   </tr>
                 ) : repairOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={9}>
+                    <td colSpan={8}>
                       <div className="empty-state">
                         <i className="fas fa-clipboard" />
                         <strong>Tidak ada data Repair Order yang cocok</strong>
@@ -183,18 +183,6 @@ export function PortalOverview() {
                     <td>{ro.phone}</td>
                     <td><strong>{ro.occurrences}</strong> transaksi</td>
                     <td>{ro.firstDate} s/d {ro.lastDate}</td>
-                    <td>
-                      <button
-                        type="button"
-                        className="btn-sm primary"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedRO(ro);
-                        }}
-                      >
-                        Pratinjau
-                      </button>
-                    </td>
                   </tr>
                 ))}
               </tbody>

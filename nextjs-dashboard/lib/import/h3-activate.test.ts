@@ -13,6 +13,10 @@ test('buildH3ActivationHeaderMap maps activation fields to canonical names', () 
     'Assigned Dealer',
     'Source Data',
     'Identify Has FU',
+    'Lebel Contact',
+    'Progress FU',
+    'Prospect Status',
+    'Waktu Follow Up',
   ]);
 
   assert.equal(map['id'], 'source_id');
@@ -23,6 +27,10 @@ test('buildH3ActivationHeaderMap maps activation fields to canonical names', () 
   assert.equal(map['assigned dealer'], 'assigned_dealer');
   assert.equal(map['source data'], 'source_data');
   assert.equal(map['identify has fu'], 'has_follow_up');
+  assert.equal(map['lebel contact'], 'contact_label');
+  assert.equal(map['progress fu'], 'progress_status');
+  assert.equal(map['prospect status'], 'prospect_status');
+  assert.equal(map['waktu follow up'], 'followed_up_at');
 });
 
 test('normalizeH3ActivationRow preserves lead identity and FU status', () => {
@@ -36,6 +44,10 @@ test('normalizeH3ActivationRow preserves lead identity and FU status', () => {
     'Source Data': 'H1 to H3',
     'Identify Has FU': 'YA',
     'Status Contact': 'Telp Terhubung',
+    'Lebel Contact': 'CONTACTED',
+    'Progress FU': 'Deal',
+    'Prospect Status': 'Prospect Hot',
+    'Waktu Follow Up': '2026-09-16 10:00:00',
     'Alasan Not Deal': 'Sudah Membeli',
   });
 
@@ -48,5 +60,9 @@ test('normalizeH3ActivationRow preserves lead identity and FU status', () => {
   assert.equal(row.sourceData, 'H1 to H3');
   assert.equal(row.hasFollowUp, 'YA');
   assert.equal(row.contactStatus, 'Telp Terhubung');
+  assert.equal(row.contactLabel, 'CONTACTED');
+  assert.equal(row.progressStatus, 'Deal');
+  assert.equal(row.prospectStatus, 'Prospect Hot');
+  assert.equal(row.followedUpAt instanceof Date, true);
   assert.equal(row.notDealReason, 'Sudah Membeli');
 });
