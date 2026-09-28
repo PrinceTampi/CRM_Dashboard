@@ -5,14 +5,6 @@ import { CrmShell } from '@/component/layout/crm-shell';
 import { downloadCsvFile } from '@/lib/crm-data';
 import type { H2Record } from '@/lib/definitions';
 
-const monthOptions = [
-  { value: '2026-08', label: 'Agustus 2026' },
-  { value: '2026-07', label: 'Juli 2026' },
-  { value: '2026-06', label: 'Juni 2026' },
-  { value: '2026-05', label: 'Mei 2026' },
-  { value: '2026-04', label: 'April 2026' },
-];
-
 const pageSize = 10;
 
 function StatCard({
@@ -59,7 +51,7 @@ function SectionCard({ title, children }: { title: string; children: React.React
 }
 
 export function ExpressH2View() {
-  const [selectedMonth, setSelectedMonth] = useState('2026-07');
+  const [selectedMonth, setSelectedMonth] = useState('');
   const [page, setPage] = useState(1);
   const [fuList, setFuList] = useState<H2Record[]>([]);
   const [totalLeads, setTotalLeads] = useState(0);
@@ -69,6 +61,13 @@ export function ExpressH2View() {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    const now = new Date();
+    setSelectedMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedMonth) return;
+
     let active = true;
 
     const load = async () => {
@@ -143,23 +142,15 @@ export function ExpressH2View() {
           <label htmlFor="h2MonthFilter">
             <i className="fas fa-calendar-alt" aria-hidden="true" /> Filter Bulan:
           </label>
-          <select
+          <input
+            type="month"
             id="h2MonthFilter"
             value={selectedMonth}
             onChange={(event) => {
               setSelectedMonth(event.target.value);
               setPage(1);
             }}
-          >
-            {monthOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <button type="button" className="btn-sm primary" onClick={() => setPage(1)}>
-            <i className="fas fa-filter" aria-hidden="true" /> Terapkan
-          </button>
+          />
         </div>
 
         <div className="stats-grid">
