@@ -173,6 +173,13 @@ Field metrik opsional: `sms_sent`, `sms_failed`, `workload_m_minus_1`,
 `direct_touch_deal`, `direct_touch_hot_prospect`, `direct_touch_low_prospect`,
 `direct_touch_not_deal`, dan `text_analysis`.
 
+Impor DataProspek untuk Niguri H1 hanya menyertakan channel `CRM Leads H1 - H1
+(Hanya Beli)`, `CRM Leads H2 Others - H1 (Hanya Servis)`, dan `CRM Leads H2
+Own - H1 (Beli & Servis)`. `Contact Status` dibatasi ke nilai kosong,
+`CONTACTED`, `REJECTED`, dan `UNREACHABLE`; nilai kosong dihitung sebagai
+workload. Deal/unit hanya dihitung dari `Status` `Deal SPK Indent` dan
+`Deal SPK Non Indent`.
+
 ## Niguri H3
 
 Grain: dealer, tahun, bulan, dan pipeline (`H1 to H3` atau `H2 to H3`). Field

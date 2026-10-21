@@ -1,0 +1,5 @@
+ALTER TABLE "niguri_h1_snapshots"
+ADD COLUMN "call_contacted" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "call_unreachable" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "call_rejected" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN "call_workload" INTEGER NOT NULL DEFAULT 0;

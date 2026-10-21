@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
 import { prisma } from '@/lib/prisma';
 import { safeRawJson } from '@/lib/upload-safe';
+import { aggregateNiguriProspectRows, NIGURI_H1_SOURCE_CHANNELS } from '@/lib/import/niguri-h1';
 
 function normalizeHeader(value: unknown): string {
   return String(value ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
@@ -59,6 +60,131 @@ function getMonthRange(value: string | null) {
   return { start, end };
 }
 
+async function importProspectWorkbook(file: File, dealer: { id: string; name: string }, rows: unknown[][], adminUserId: string, previewOnly: boolean) {
+  const [headerRow = [], ...dataRows] = rows;
+  let aggregation;
+  try {
+    aggregation = aggregateNiguriProspectRows(headerRow, dataRows);
+  } catch (error) {
+    return NextResponse.json({
+      ok: false,
+      message: error instanceof Error ? error.message : 'Header sheet DataProspek tidak valid.',
+    }, { status: 422 });
+  }
+
+  if (aggregation.aggregates.length === 0) {
+    return NextResponse.json({
+      ok: false,
+      message: 'Tidak ditemukan baris DataProspek valid dari tiga kategori sumber Niguri yang didukung.',
+      ignoredChannelRows: aggregation.ignoredChannelRows,
+      ignoredContactStatusRows: aggregation.ignoredContactStatusRows,
+      invalidRows: aggregation.invalidRows,
+    }, { status: 422 });
+  }
+
+  const monthCounts = aggregation.aggregates.reduce<Record<string, number>>((counts, item) => {
+    counts[item.month] = (counts[item.month] ?? 0) + item.sourceRows;
+    return counts;
+  }, {});
+  const importSummary = {
+    dealer: dealer.name,
+    sourceDealerCodes: aggregation.dealerCodes,
+    importedRows: aggregation.aggregates.reduce((total, item) => total + item.sourceRows, 0),
+    snapshotCount: aggregation.aggregates.length,
+    months: monthCounts,
+    duplicateRows: aggregation.duplicateRows,
+    invalidRows: aggregation.invalidRows,
+    ignoredChannelRows: aggregation.ignoredChannelRows,
+    ignoredContactStatusRows: aggregation.ignoredContactStatusRows,
+  };
+  if (previewOnly) {
+    return NextResponse.json({
+      ok: true,
+      previewOnly: true,
+      ...importSummary,
+      message: 'Preview DataProspek siap. Periksa kode dealer sumber sebelum konfirmasi impor.',
+    });
+  }
+
+  const fileType = file.type || (file.name.toLowerCase().endsWith('.csv')
+    ? 'text/csv'
+    : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+  const batchId = await prisma.$transaction(async (tx) => {
+    const batch = await tx.importBatch.create({
+      data: {
+        fileName: file.name,
+        fileType,
+        status: 'PROCESSING',
+        uploadedById: adminUserId,
+        dealerId: dealer.id,
+      },
+    });
+
+    for (const [index, item] of aggregation.aggregates.entries()) {
+      const [year, month] = item.month.split('-').map(Number);
+      const snapshotMonth = new Date(Date.UTC(year, month - 1, 1));
+      const metrics = {
+        totalDataSource: item.totalDataSource,
+        totalDataAnalysisResult: item.totalDataAnalysisResult,
+        totalDataFollowupPhone: item.totalDataFollowupPhone,
+        callContacted: item.callContacted,
+        callUnreachable: item.callUnreachable,
+        callRejected: item.callRejected,
+        callWorkload: item.callWorkload,
+        totalProspect: item.totalProspect,
+        totalCustomerDeal: item.totalCustomerDeal,
+        totalUnitSold: item.totalUnitSold,
+      };
+      const snapshot = await tx.niguriH1Snapshot.upsert({
+        where: {
+          dealerId_month_sourceCategory: {
+            dealerId: dealer.id,
+            month: snapshotMonth,
+            sourceCategory: item.sourceCategory,
+          },
+        },
+        update: metrics,
+        create: {
+          dealerId: dealer.id,
+          month: snapshotMonth,
+          sourceCategory: item.sourceCategory,
+          ...metrics,
+        },
+      });
+      await tx.importRow.create({
+        data: {
+          batchId: batch.id,
+          sheetName: 'PROSPEK',
+          rowNumber: index + 2,
+          rawData: safeRawJson({
+            month: item.month,
+            sourceCategory: item.sourceCategory,
+            sourceRows: item.sourceRows,
+            metrics,
+          }) as any,
+          status: 'IMPORTED',
+          importedEntity: 'niguri-h1-snapshot',
+          importedEntityId: snapshot.id,
+        },
+      });
+    }
+
+    await tx.importBatch.update({
+      where: { id: batch.id },
+      data: { status: aggregation.invalidRows > 0 ? 'COMPLETED_WITH_WARNINGS' : 'COMPLETED' },
+    });
+    return batch.id;
+  });
+
+  return NextResponse.json({
+    ok: true,
+    batchId,
+    ...importSummary,
+    message: `DataProspek berhasil diolah menjadi ${aggregation.aggregates.length} snapshot Niguri H1.`,
+  });
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -70,7 +196,20 @@ export async function GET(request: NextRequest) {
       : null;
 
     if (!dealer) {
-      return NextResponse.json({ totalDataSource: 0, totalDataAnalysisResult: 0, totalDataFollowupPhone: 0, totalProspect: 0, totalCustomerDeal: 0, totalUnitSold: 0, hasSnapshot: false });
+      return NextResponse.json({
+        totalDataSource: 0,
+        totalDataAnalysisResult: 0,
+        totalDataFollowupPhone: 0,
+        callContacted: 0,
+        callUnreachable: 0,
+        callRejected: 0,
+        callWorkload: 0,
+        totalProspect: 0,
+        totalCustomerDeal: 0,
+        totalUnitSold: 0,
+        sourceBreakdown: [],
+        hasSnapshot: false,
+      });
     }
 
     const snapshots = await prisma.niguriH1Snapshot.findMany({
@@ -81,14 +220,35 @@ export async function GET(request: NextRequest) {
       totalDataSource: snapshots.reduce((total, row) => total + row.totalDataSource, 0),
       totalDataAnalysisResult: snapshots.reduce((total, row) => total + row.totalDataAnalysisResult, 0),
       totalDataFollowupPhone: snapshots.reduce((total, row) => total + row.totalDataFollowupPhone, 0),
+      callContacted: snapshots.reduce((total, row) => total + row.callContacted, 0),
+      callUnreachable: snapshots.reduce((total, row) => total + row.callUnreachable, 0),
+      callRejected: snapshots.reduce((total, row) => total + row.callRejected, 0),
+      callWorkload: snapshots.reduce((total, row) => total + row.callWorkload, 0),
       totalProspect: snapshots.reduce((total, row) => total + row.totalProspect, 0),
       totalCustomerDeal: snapshots.reduce((total, row) => total + row.totalCustomerDeal, 0),
       totalUnitSold: snapshots.reduce((total, row) => total + row.totalUnitSold, 0),
+      sourceBreakdown: NIGURI_H1_SOURCE_CHANNELS.map((sourceCategory) => {
+        const rows = snapshots.filter((row) => row.sourceCategory === sourceCategory);
+        return {
+          sourceCategory,
+          totalDataSource: rows.reduce((total, row) => total + row.totalDataSource, 0),
+          totalDataAnalysisResult: rows.reduce((total, row) => total + row.totalDataAnalysisResult, 0),
+          totalDataFollowupPhone: rows.reduce((total, row) => total + row.totalDataFollowupPhone, 0),
+          callContacted: rows.reduce((total, row) => total + row.callContacted, 0),
+          callUnreachable: rows.reduce((total, row) => total + row.callUnreachable, 0),
+          callRejected: rows.reduce((total, row) => total + row.callRejected, 0),
+          callWorkload: rows.reduce((total, row) => total + row.callWorkload, 0),
+          totalProspect: rows.reduce((total, row) => total + row.totalProspect, 0),
+          totalCustomerDeal: rows.reduce((total, row) => total + row.totalCustomerDeal, 0),
+          totalUnitSold: rows.reduce((total, row) => total + row.totalUnitSold, 0),
+          hasSnapshot: rows.length > 0,
+        };
+      }),
       hasSnapshot: snapshots.length > 0,
     });
   } catch (error) {
     console.error('Failed to load Niguri H1 data', error);
-    return NextResponse.json({ totalDataSource: 0, totalDataAnalysisResult: 0, totalDataFollowupPhone: 0, totalProspect: 0, totalCustomerDeal: 0, totalUnitSold: 0, hasSnapshot: false }, { status: 500 });
+    return NextResponse.json({ ok: false, message: 'Data Niguri H1 gagal dimuat.' }, { status: 500 });
   }
 }
 
@@ -98,15 +258,34 @@ export async function POST(request: NextRequest) {
     const file = formData.get('file');
     const dealerName = String(formData.get('dealer') ?? '').trim();
     const selectedMonth = String(formData.get('month') ?? '').trim();
+    const action = String(formData.get('action') ?? '').trim();
 
-    if (!(file instanceof File)) return NextResponse.json({ ok: false, message: 'File DMMS wajib dipilih.' }, { status: 400 });
+    if (!(file instanceof File)) return NextResponse.json({ ok: false, message: 'File DataProspek atau DMMS wajib dipilih.' }, { status: 400 });
     if (!dealerName) return NextResponse.json({ ok: false, message: 'Dealer wajib dipilih.' }, { status: 400 });
     if (!validMonth(selectedMonth)) return NextResponse.json({ ok: false, message: 'Pilih bulan data yang valid.' }, { status: 400 });
+    if (!/\.(xlsx|xls|csv)$/i.test(file.name)) return NextResponse.json({ ok: false, message: 'Format file harus XLSX, XLS, atau CSV.' }, { status: 400 });
 
     const dealer = await prisma.dealer.findFirst({ where: { name: dealerName } });
     if (!dealer) return NextResponse.json({ ok: false, message: `Dealer "${dealerName}" belum terdaftar di master dealer.` }, { status: 422 });
 
-    const sheets = await readWorkbookRows(file);
+    let sheets;
+    try {
+      sheets = await readWorkbookRows(file);
+    } catch (error) {
+      console.error('Failed to read Niguri H1 upload file', error);
+      return NextResponse.json({ ok: false, message: 'File tidak dapat dibaca. Pastikan file Excel atau CSV tidak rusak.' }, { status: 422 });
+    }
+    const prospectSheet = sheets.find((item) => item.sheetName.toLowerCase().includes('prospek'));
+    const sourceSheet = prospectSheet ?? sheets[0];
+    const sourceHeaders = sourceSheet?.rows[0] ?? [];
+    const isProspectData = sourceHeaders.some((header) => normalizeHeader(header) === 'channel_penjualan')
+      && sourceHeaders.some((header) => normalizeHeader(header) === 'tgl_input_guestbook');
+    if (isProspectData && sourceSheet) {
+      const adminUser = await prisma.user.findFirst({ where: { role: 'ADMIN' }, orderBy: { createdAt: 'asc' } });
+      if (!adminUser) return NextResponse.json({ ok: false, message: 'Admin account not found. Seed demo users first.' }, { status: 500 });
+      return importProspectWorkbook(file, dealer, sourceSheet.rows, adminUser.id, action === 'preview');
+    }
+
     const sheet = sheets.find((item) => item.sheetName.toLowerCase().includes('niguri h1')) ?? sheets[0];
     if (!sheet || sheet.rows.length < 2) return NextResponse.json({ ok: false, message: 'File DMMS kosong atau sheet Niguri H1 tidak ditemukan.' }, { status: 422 });
 
@@ -179,6 +358,10 @@ export async function POST(request: NextRequest) {
         totalDataSource: row.totalDataSource!,
         totalDataAnalysisResult: row.totalDataAnalysisResult!,
         totalDataFollowupPhone: row.totalDataFollowupPhone!,
+        callContacted: 0,
+        callUnreachable: 0,
+        callRejected: 0,
+        callWorkload: 0,
         totalProspect: row.totalProspect!,
         totalCustomerDeal: row.totalCustomerDeal!,
         totalUnitSold: row.totalUnitSold!,
