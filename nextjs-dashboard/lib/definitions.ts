@@ -158,6 +158,7 @@ export type H3ActivateRecord = {
   contact: string;
   deal?: string;
   date: string;
+  h23Match: 'both' | 'phone' | 'name' | 'conflict' | 'none' | 'not_compared';
 };
 
 export type BirthdayFuRecord = {

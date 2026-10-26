@@ -95,10 +95,16 @@ sumber validasi status kontak dan alasan Not Deal.
 ## H3 Activate, multi-sheet dan Master LoV
 
 - ID lead wajib ada dan tidak boleh dimodifikasi atau dipindahkan.
+- Header ID `ID (JANGAN DIRUBAH/MODIFY/DIGESER)` diperlakukan sebagai ID lead.
 - Status Contact dan Alasan Not Deal dicocokkan ke sheet Master LoV.
 - Sinkronisasi status dan histori dilakukan berdasarkan ID lead.
 - Nilai LoV yang belum dikenal tetap disimpan sebagai `UNMAPPED` dan
 	menghasilkan notifikasi admin.
+- Waktu upload tanpa zona waktu dibaca sebagai waktu WITA.
+- Laporan Niguri H3 membandingkan nama dan nomor HP secara terpisah dengan
+	customer yang memiliki invoice H23; pencocokan tidak menggabungkan customer.
+- Jika database belum memiliki invoice H23, status perbandingan ditandai belum
+	tersedia, bukan tidak ditemukan.
 
 ## Niguri report
 

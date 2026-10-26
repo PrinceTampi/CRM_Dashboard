@@ -1,11 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildH3ActivationHeaderMap, normalizeH3ActivationRow } from './h3-activate.ts';
+import {
+  buildH3ActivationHeaderMap,
+  compareH3IdentityToH23,
+  normalizeH3ActivationRow,
+} from './h3-activate.ts';
 
 test('buildH3ActivationHeaderMap maps activation fields to canonical names', () => {
   const map = buildH3ActivationHeaderMap([
     'ID',
+    'ID (JANGAN DIRUBAH/MODIFY/DIGESER)',
     'Waktu Upload',
     'Nama',
     'No HP',
@@ -20,6 +25,7 @@ test('buildH3ActivationHeaderMap maps activation fields to canonical names', () 
   ]);
 
   assert.equal(map['id'], 'source_id');
+  assert.equal(map['id (jangan dirubah/modify/digeser)'], 'source_id');
   assert.equal(map['waktu upload'], 'uploaded_at');
   assert.equal(map['nama'], 'nama');
   assert.equal(map['no hp'], 'no_hp');
@@ -65,4 +71,35 @@ test('normalizeH3ActivationRow preserves lead identity and FU status', () => {
   assert.equal(row.prospectStatus, 'Prospect Hot');
   assert.equal(row.followedUpAt instanceof Date, true);
   assert.equal(row.notDealReason, 'Sudah Membeli');
+});
+
+test('normalizeH3ActivationRow reads workbook IDs, uses fallback phone, and preserves WITA upload time', () => {
+  const row = normalizeH3ActivationRow({
+    'ID (JANGAN DIRUBAH/MODIFY/DIGESER)': 15012,
+    'Waktu Upload': '2026-10-04 19:01:46',
+    Nama: 'Budi Santoso',
+    'No HP': '',
+    'No Telp': '+62 812-3456-7890',
+  });
+
+  assert.equal(row.sourceId, 15012);
+  assert.equal(row.uploadedAt?.toISOString(), '2026-10-04T11:01:46.000Z');
+  assert.equal(row.noHp, '081234567890');
+});
+
+test('compareH3IdentityToH23 matches normalized phone and name independently', () => {
+  const result = compareH3IdentityToH23('  BUDI   SANTOSO ', '+62 812-3456-7890', [
+    { name: 'Budi Santoso', normalizedName: 'budi santoso', phone: '081234567890' },
+  ]);
+
+  assert.deepEqual(result, { status: 'both', matchedByPhone: true, matchedByName: true });
+});
+
+test('compareH3IdentityToH23 flags name and phone matches on different H23 customers', () => {
+  const result = compareH3IdentityToH23('Budi Santoso', '081234567890', [
+    { name: 'Budi Santoso', normalizedName: 'budi santoso', phone: '081111111111' },
+    { name: 'Andi Saputra', normalizedName: 'andi saputra', phone: '081234567890' },
+  ]);
+
+  assert.deepEqual(result, { status: 'conflict', matchedByPhone: true, matchedByName: true });
 });

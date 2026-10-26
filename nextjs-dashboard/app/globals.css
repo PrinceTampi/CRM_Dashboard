@@ -92,7 +92,21 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   background: var(--white);
   box-shadow: 0 24px 60px rgba(8, 24, 39, 0.22);
 }
-.login-brand-panel { padding: 52px 48px; color: var(--white); background: linear-gradient(145deg, #0b1e33, #17466b); }
+.login-brand-panel {
+  position: relative;
+  isolation: isolate;
+  padding: 52px 48px;
+  overflow: hidden;
+  color: var(--white);
+  background: #0b1e33 url('/login-dealership.jpg') center 58% / cover no-repeat;
+}
+.login-brand-panel::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(145deg, rgba(8, 24, 39, 0.78), rgba(11, 30, 51, 0.52) 58%, rgba(11, 30, 51, 0.76));
+  content: '';
+}
 .login-brand-mark { width: 46px; height: 46px; display: grid; place-items: center; margin-bottom: 34px; border-radius: 10px; color: var(--white); background: var(--accent); font-size: 20px; }
 .login-eyebrow, .login-form-kicker { display: block; color: #b9d1e6; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
 .login-brand-panel h1 { max-width: 390px; margin-top: 14px; font-size: clamp(28px, 4vw, 42px); line-height: 1.08; letter-spacing: -0.03em; }
