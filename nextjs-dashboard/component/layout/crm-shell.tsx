@@ -2,9 +2,11 @@
 
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import { downloadCsvFile } from '@/lib/crm-data';
+import brandLogo from '@/image/MSG.jpeg';
 
 export type ModalState = {
   isOpen: boolean;
@@ -116,23 +118,12 @@ function ToastStack({ toasts, onClose }: { toasts: Toast[]; onClose: (id: number
 function SidebarBrand() {
   return (
     <div className="sidebar-brand">
-      <div
-        style={{
-          width: '40px',
-          height: '40px',
-          borderRadius: '6px',
-          background: '#CC0000',
-          color: '#FFFFFF',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontWeight: 800,
-          fontSize: '20px',
-          flexShrink: 0,
-        }}
-      >
-        M
-      </div>
+      <Image
+        src={brandLogo}
+        alt="Mitra Jaya Group"
+        className="sidebar-brand-logo"
+        priority
+      />
       <div className="sidebar-brand-text">
         <strong>One Dashboard One Control</strong>
         <span>CRM · Manado · SULUT</span>
