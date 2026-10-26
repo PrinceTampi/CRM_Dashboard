@@ -198,7 +198,6 @@ export function NiguriReportView({ initialTab = 'h1' }: { initialTab?: 'h1' | 'h
   const [dealersLoading, setDealersLoading] = useState(true);
   const [dealerLoadError, setDealerLoadError] = useState('');
   const [h1Data, setH1Data] = useState<H1ReportData>(EMPTY_H1_DATA);
-  const [h1Loading, setH1Loading] = useState(true);
   const [h1LoadError, setH1LoadError] = useState('');
   const [dmmsFile, setDmmsFile] = useState<File | null>(null);
   const [dmmsPreview, setDmmsPreview] = useState<NiguriImportPreview | null>(null);
@@ -206,6 +205,24 @@ export function NiguriReportView({ initialTab = 'h1' }: { initialTab?: 'h1' | 'h
   const [dmmsMessage, setDmmsMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    if (!dmmsMessage) return;
+    const timeout = window.setTimeout(() => setDmmsMessage(null), dmmsMessage.type === 'error' ? 8000 : 4500);
+    return () => window.clearTimeout(timeout);
+  }, [dmmsMessage]);
+
+  useEffect(() => {
+    if (!dealerLoadError) return;
+    const timeout = window.setTimeout(() => setDealerLoadError(''), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [dealerLoadError]);
+
+  useEffect(() => {
+    if (!h1LoadError) return;
+    const timeout = window.setTimeout(() => setH1LoadError(''), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [h1LoadError]);
 
   useEffect(() => {
     let active = true;
@@ -216,6 +233,7 @@ export function NiguriReportView({ initialTab = 'h1' }: { initialTab?: 'h1' | 'h
         if (!active) return;
         const rows = (payload.dealers ?? []) as DealerOption[];
         setDealers(rows);
+        setDealerLoadError('');
         setDealer((current) => rows.some((item) => item.name === current) ? current : rows[0]?.name ?? '');
       })
       .catch((error) => {
@@ -227,11 +245,10 @@ export function NiguriReportView({ initialTab = 'h1' }: { initialTab?: 'h1' | 'h
 
   useEffect(() => {
     let active = true;
-    setH1Loading(true);
+    setH1LoadError('');
     if (!dealer) {
       setH1Data(EMPTY_H1_DATA);
       setH1LoadError('');
-      setH1Loading(false);
       return () => { active = false; };
     }
 
@@ -250,8 +267,7 @@ export function NiguriReportView({ initialTab = 'h1' }: { initialTab?: 'h1' | 'h
         if (!active) return;
         setH1Data(EMPTY_H1_DATA);
         setH1LoadError(error instanceof Error ? error.message : 'Data Niguri H1 gagal dimuat.');
-      })
-      .finally(() => { if (active) setH1Loading(false); });
+      });
     return () => { active = false; };
   }, [dealer, selectedMonth, refreshKey]);
 
@@ -372,11 +388,7 @@ export function NiguriReportView({ initialTab = 'h1' }: { initialTab?: 'h1' | 'h
       {dealerLoadError && <div className="kpi-hint danger" role="alert">{dealerLoadError}</div>}
       {h1LoadError && <div className="kpi-hint danger" role="alert">{h1LoadError}</div>}
       {dmmsPreview && <div className="kpi-hint" role="status">Kode dealer sumber {dmmsPreview.sourceDealerCodes.join(', ') || '(tidak ada)'} akan dipetakan ke dealer {dealer}. Pastikan ini pemetaan yang benar sebelum klik Konfirmasi Impor.</div>}
-      {!dealersLoading && dealers.length === 0 && !dealerLoadError && <div className="kpi-hint" role="status">Belum ada dealer di master. Minta Admin menambahkan kode dan nama resmi dealer terlebih dahulu.</div>}
-      {dmmsFile && <div className="kpi-hint"><i className="fas fa-file-excel" aria-hidden="true" /> File dipilih: {dmmsFile.name}</div>}
       {dmmsMessage && <div className={`kpi-hint ${dmmsMessage.type === 'error' ? 'danger' : ''}`} role={dmmsMessage.type === 'error' ? 'alert' : 'status'}>{dmmsMessage.text}</div>}
-      {tab === 'h1' && <div className="kpi-hint" role="status">{h1Loading ? 'Memuat snapshot Niguri H1...' : h1Data.hasSnapshot ? `Snapshot Niguri H1 tersedia untuk ${dealer} periode ${selectedMonth}. Nilai dikelompokkan berdasarkan Channel Penjualan.` : `Belum ada snapshot Niguri H1 untuk ${dealer} periode ${selectedMonth}.`}</div>}
-      {tab === 'h1' && <div className="kpi-hint">Channel H1: {NIGURI_H1_SOURCE_CHANNELS.join(', ')}. Contact Status yang dihitung: kosong, Contacted, Rejected, dan Unreachable. Deal/unit hanya menghitung Status Deal SPK Indent dan Deal SPK Non Indent.</div>}
       <div className="filter-bar"><Link href="/niguri/h1" className={`btn-sm ${tab === 'h1' ? 'primary' : ''}`}>Niguri H1</Link><Link href="/niguri/h3" className={`btn-sm ${tab === 'h3' ? 'primary' : ''}`}>Niguri H3</Link></div>
       {tab === 'h1' && <div className="card niguri-format-card"><h3>Format Niguri H1 <span className="badge info">{dealer}</span><button type="button" className="btn-download" onClick={handleCopyH1} style={{ marginLeft: '12px' }}><i className="fas fa-copy" aria-hidden="true" /> Copy Sheet</button></h3><SpreadsheetGrid rows={buildH1Rows(h1Data, monthLabel)} columnCount={26} className="niguri-h1-sheet" /></div>}
       {tab === 'h3' && <div className="card niguri-format-card"><h3>Format Niguri H3 - Parts dan Conversion<button type="button" className="btn-download" onClick={handleCopyH3} style={{ marginLeft: '12px' }}><i className="fas fa-copy" aria-hidden="true" /> Copy Sheet</button></h3><SpreadsheetGrid rows={buildH3Rows(dealer)} columnCount={50} className="niguri-h3-sheet" /></div>}
