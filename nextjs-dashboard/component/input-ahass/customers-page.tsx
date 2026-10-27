@@ -62,7 +62,7 @@ function CustomerTable({ events }: { events: EventRecord[] }) {
   );
 }
 
-export function CustomersPage() {
+export function CustomersPage({ restrictedAccess = false }: { restrictedAccess?: boolean }) {
   const [events, setEvents] = useState<EventRecord[]>([]);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -168,7 +168,7 @@ export function CustomersPage() {
   };
 
   return (
-    <CrmShell title="Input AHASS" crumb="Customer & AHASS">
+    <CrmShell title="Input AHASS" crumb="Customer & AHASS" restrictedAccess={restrictedAccess}>
       <div id="input" className="tab-content" style={{ display: 'block' }}>
         <div className="page-heading">
           <h2>Input AHASS</h2>
@@ -273,12 +273,14 @@ export function CustomersPage() {
             <AlertBox alert={alertMsg} />
           </div>
 
-          <div className="card">
-            <h3>
-              <i className="fas fa-history" aria-hidden="true" /> Konsumen Baru Disimpan ({events.length})
-            </h3>
-            <CustomerTable events={events} />
-          </div>
+          {!restrictedAccess && (
+            <div className="card">
+              <h3>
+                <i className="fas fa-history" aria-hidden="true" /> Konsumen Baru Disimpan ({events.length})
+              </h3>
+              <CustomerTable events={events} />
+            </div>
+          )}
         </div>
       </div>
     </CrmShell>

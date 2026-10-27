@@ -188,10 +188,10 @@ export function MonitoringRcrView() {
   const previousLabel = previousMonth ? monthLabelFromKey(previousMonth) : 'Tidak ada baseline';
 
   return (
-    <CrmShell title="Monitoring RCR" crumb="Customer Performance">
+    <CrmShell title="Monitoring LCR" crumb="Customer Performance">
       <div id="monitoringrcr" className="tab-content" style={{ display: 'block' }}>
         <div className="page-heading">
-          <h2>Monitoring RCR</h2>
+          <h2>Monitoring LCR</h2>
           <p>Monitoring performa repeat customer berdasarkan jumlah pelanggan yang datang kembali dalam periode tertentu.</p>
         </div>
 

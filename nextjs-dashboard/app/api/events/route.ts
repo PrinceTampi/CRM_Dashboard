@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
 import { validateEventPayload } from '@/lib/validation';
 
@@ -12,6 +13,15 @@ function toDateInput(value: Date | string): string {
 }
 
 export async function GET() {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ ok: false, message: 'Silakan login untuk memuat data event.' }, { status: 401 });
+  }
+
+  if (session.user.role === 'AHASS') {
+    return NextResponse.json({ events: [] });
+  }
+
   const events = await prisma.eventRegistration.findMany({
     orderBy: { eventDate: 'desc' },
     take: 20,
@@ -32,6 +42,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const session = await auth();
+  if (!session?.user) {
+    return NextResponse.json({ ok: false, message: 'Silakan login untuk menyimpan data event.' }, { status: 401 });
+  }
+
   try {
     const body = await request.json();
     const payload = validateEventPayload(body);
@@ -45,60 +60,90 @@ export async function POST(request: Request) {
 
     const { name, phone, engineNumber, location, notes } = payload.data;
 
-    let customer = await prisma.customer.findFirst({
-      where: {
-        OR: [{ phone: { equals: phone } }, { alternatePhone: { equals: phone } }],
-      },
-      orderBy: { createdAt: 'asc' },
-    });
-
-    if (!customer) {
-      customer = await prisma.customer.create({
-        data: {
-          name,
-          normalizedName: name.toLowerCase().replace(/\s+/g, ' '),
-          phone,
-          contactIdentityStatus: 'UNVERIFIED',
-        },
+    const result = await prisma.$transaction(async (transaction) => {
+      const vehicle = await transaction.vehicle.findUnique({
+        where: { engineNumber },
+        include: { customer: true },
       });
-    }
 
-    const existingVehicle = await prisma.vehicle.findUnique({
-      where: { engineNumber },
-    });
+      let customer = vehicle?.customer ?? await transaction.customer.findFirst({
+        where: {
+          OR: [{ phone: { equals: phone } }, { alternatePhone: { equals: phone } }],
+        },
+        orderBy: { createdAt: 'asc' },
+      });
 
-    if (!existingVehicle) {
-      await prisma.vehicle.create({
+      if (vehicle && customer && customer.id !== vehicle.customerId) {
+        return { conflict: true as const };
+      }
+
+      if (!customer) {
+        customer = await transaction.customer.create({
+          data: {
+            name,
+            normalizedName: name.toLowerCase().replace(/\s+/g, ' '),
+            phone,
+            contactIdentityStatus: 'UNVERIFIED',
+          },
+        });
+      } else if (vehicle && customer.phone !== phone && customer.alternatePhone !== phone) {
+        if (!customer.phone) {
+          customer = await transaction.customer.update({
+            where: { id: customer.id },
+            data: { phone },
+          });
+        } else if (!customer.alternatePhone) {
+          customer = await transaction.customer.update({
+            where: { id: customer.id },
+            data: { alternatePhone: phone },
+          });
+        } else {
+          return { conflict: true as const };
+        }
+      }
+
+      if (!vehicle) {
+        await transaction.vehicle.create({
+          data: {
+            customerId: customer.id,
+            engineNumber,
+            frameNumber: engineNumber,
+            active: true,
+          },
+        });
+      }
+
+      const event = await transaction.eventRegistration.create({
         data: {
           customerId: customer.id,
           engineNumber,
-          frameNumber: engineNumber,
-          active: true,
+          location: location || null,
+          notes: notes || null,
+          eventDate: new Date(),
         },
+        include: { customer: true },
       });
-    }
 
-    const event = await prisma.eventRegistration.create({
-      data: {
-        customerId: customer.id,
-        engineNumber,
-        location: location || null,
-        notes: notes || null,
-        eventDate: new Date(),
-      },
-      include: { customer: true },
+      return { conflict: false as const, event, customer };
     });
+
+    if (result.conflict) {
+      return NextResponse.json(
+        { ok: false, message: 'Nomor mesin sudah terhubung ke data konsumen lain. Periksa kembali nomor mesin dan nomor HP.' },
+        { status: 409 }
+      );
+    }
 
     return NextResponse.json({
       ok: true,
       event: {
-        id: event.id,
-        name: event.customer?.name ?? customer.name,
-        phone: event.customer?.phone ?? customer.phone ?? '',
-        engineNumber: event.engineNumber,
-        location: event.location ?? null,
-        notes: event.notes ?? null,
-        eventDate: toDateInput(event.eventDate),
+        id: result.event.id,
+        name: result.event.customer?.name ?? result.customer.name,
+        phone: result.event.customer?.phone ?? result.customer.phone ?? '',
+        engineNumber: result.event.engineNumber,
+        location: result.event.location ?? null,
+        notes: result.event.notes ?? null,
+        eventDate: toDateInput(result.event.eventDate),
       },
     });
   } catch (error) {

@@ -30,6 +30,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   },
   providers: [
     Credentials({
+      id: 'ahass-kiosk',
+      name: 'AHASS',
+      credentials: {},
+      async authorize() {
+        return {
+          id: 'ahass-kiosk',
+          name: 'AHASS',
+          role: 'AHASS',
+        };
+      },
+    }),
+    Credentials({
       credentials: {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },

@@ -47,7 +47,8 @@ const navItems: NavGroup[] = [
   ]},
   { section: 'Admin & Follow-up', items: [
     { label: 'Admin Field', path: '/admin', icon: 'fa-sliders' },
-    { label: 'LCR', path: '/lcr', icon: 'fa-filter-circle-dollar' },
+    { label: 'Input LCR', path: '/lcr', icon: 'fa-list-check' },
+    { label: 'Monitoring LCR', path: '/monitoring-rcr', icon: 'fa-rotate' },
   ]},
   { section: 'Data & Integration', items: [
     { label: 'Upload & Integrasi', path: '/upload', icon: 'fa-upload' },
@@ -58,9 +59,6 @@ const navItems: NavGroup[] = [
   ]},
   { section: 'Service & Part', items: [
     { label: 'Report Niguri', path: '/niguri', icon: 'fa-chart-simple', altPaths: ['/niguri-h3'] },
-  ]},
-  { section: 'Customer Performance', items: [
-    { label: 'Monitoring RCR', path: '/monitoring-rcr', icon: 'fa-rotate' },
   ]},
 ];
 
@@ -123,6 +121,7 @@ function SidebarBrand() {
         alt="Mitra Jaya Group"
         className="sidebar-brand-logo"
         priority
+        unoptimized
       />
       <div className="sidebar-brand-text">
         <strong>One Dashboard One Control</strong>
@@ -135,13 +134,19 @@ function SidebarBrand() {
 function NavSectionList({
   isItemActive,
   onNavigate,
+  restrictedAccess,
 }: {
   isItemActive: (path: string, altPaths?: string[]) => boolean;
   onNavigate: () => void;
+  restrictedAccess: boolean;
 }) {
+  const visibleNavItems = restrictedAccess
+    ? [{ section: 'AHASS', items: [{ label: 'Input AHASS', path: '/input-ahass', icon: 'fa-pen-alt' }] }]
+    : navItems;
+
   return (
     <nav className="sidebar-nav">
-      {navItems.map((group) => (
+      {visibleNavItems.map((group) => (
         <React.Fragment key={group.section}>
           <div className="nav-section">{group.section}</div>
           {group.items.map((item) => {
@@ -170,12 +175,14 @@ function HeaderBar({
   onToggleMenu,
   onBack,
   onLogout,
+  restrictedAccess,
 }: {
   title: string;
   currentDate: string;
   onToggleMenu: () => void;
   onBack: () => void;
   onLogout: () => void;
+  restrictedAccess: boolean;
 }) {
   return (
     <header className="dash-header">
@@ -188,9 +195,11 @@ function HeaderBar({
         >
           <i className="fas fa-bars" />
         </button>
-        <button type="button" className="back-btn" onClick={onBack}>
-          <i className="fas fa-arrow-left" aria-hidden="true" /> Kembali
-        </button>
+        {!restrictedAccess && (
+          <button type="button" className="back-btn" onClick={onBack}>
+            <i className="fas fa-arrow-left" aria-hidden="true" /> Kembali
+          </button>
+        )}
         <div className="title-area">
           <h1 className="page-title" id="pageTitle">
             {title}
@@ -249,7 +258,7 @@ function CrmModal({
   );
 }
 
-export function CrmShell({ title, crumb = 'Main', children }: CrmShellProps) {
+export function CrmShell({ title, crumb = 'Main', children, restrictedAccess = false }: CrmShellProps & { restrictedAccess?: boolean }) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -344,6 +353,7 @@ export function CrmShell({ title, crumb = 'Main', children }: CrmShellProps) {
             <NavSectionList
               isItemActive={isItemActive}
               onNavigate={() => setMobileNavOpen(false)}
+              restrictedAccess={restrictedAccess}
             />
 
             <div className="sidebar-foot">
@@ -369,6 +379,7 @@ export function CrmShell({ title, crumb = 'Main', children }: CrmShellProps) {
               onToggleMenu={() => setMobileNavOpen(!mobileNavOpen)}
               onBack={() => router.push('/')}
               onLogout={handleLogout}
+              restrictedAccess={restrictedAccess}
             />
 
             <div className="dashboard-content">

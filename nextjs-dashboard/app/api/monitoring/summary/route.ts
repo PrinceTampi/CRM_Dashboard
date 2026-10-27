@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
 
 function formatDateOnly(value: Date | string | null | undefined): string {
@@ -18,6 +19,11 @@ function monthKeyFromDate(date: Date): string {
 }
 
 export async function GET(request: NextRequest) {
+  const session = await auth();
+  if (!session?.user || session.user.role !== 'ADMIN') {
+    return NextResponse.json({ ok: false, message: 'Akses ditolak.' }, { status: 403 });
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const selectedMonth = searchParams.get('month') ?? new Date().toISOString().slice(0, 7);
@@ -153,18 +159,8 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Failed to load monitoring summary', error);
     return NextResponse.json(
-      {
-        totalCustomers: 0,
-        birthdayTodayCount: 0,
-        birthdayMonthCount: 0,
-        birthdayTodayList: [],
-        birthdayList: [],
-        eventList: [],
-        monthlyRepairOrders: [],
-        roByAhass: [],
-        salesTrend: [],
-      },
-      { status: 200 }
+      { ok: false, message: 'Data monitoring gagal dimuat.' },
+      { status: 500 }
     );
   }
 }

@@ -26,6 +26,27 @@ function LoginForm() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  async function handleAhassSignIn() {
+    setLoading(true);
+    setError('');
+
+    try {
+      const result = await signIn('ahass-kiosk', { redirect: false });
+      if (!result?.ok || result.error) {
+        setError('Akses AHASS gagal dibuka. Silakan coba lagi.');
+        return;
+      }
+
+      router.replace('/input-ahass');
+      router.refresh();
+    } catch (signInError) {
+      console.error('AHASS sign-in error:', signInError);
+      setError('Terjadi kesalahan saat membuka akses AHASS. Silakan coba lagi.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
@@ -94,7 +115,13 @@ function LoginForm() {
             {loading ? 'Memproses...' : 'Masuk ke Dashboard'}
           </button>
         </form>
-          <div className="login-form-footer"><i className="fas fa-shield-alt" aria-hidden="true" /> Akses aman untuk pengguna terdaftar</div>
+          <div className="login-access-divider"><span>atau</span></div>
+          <button type="button" className="btn-ahass-entry" onClick={handleAhassSignIn} disabled={loading}>
+            <i className={`fas ${loading ? 'fa-spinner fa-spin' : 'fa-pen-to-square'}`} aria-hidden="true" />
+            Masuk sebagai AHASS
+          </button>
+          <p className="login-ahass-note">Akses langsung ke halaman input AHASS tanpa email dan password.</p>
+          <div className="login-form-footer"><i className="fas fa-shield-alt" aria-hidden="true" /> Login admin menggunakan akun terdaftar</div>
         </div>
       </section>
     </main>

@@ -164,7 +164,7 @@ export function DashboardOverview() {
     return eventList.slice(start, start + pageSize);
   }, [eventList, eventPage]);
 
-  const recentEvents = eventList.slice(-3).reverse();
+  const recentEvents = eventList.slice(0, 3);
 
   const handleDownloadBirthdayCsv = () => {
     if (birthdayList.length === 0) {
