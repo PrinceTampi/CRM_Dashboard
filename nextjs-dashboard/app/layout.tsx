@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { AppVersionNotifier } from '@/component/app-version-notifier';
+import { CrmFeedbackProvider } from '@/component/layout/crm-shell';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -29,7 +30,7 @@ export default function RootLayout({
       </head>
       <body>
         <AppVersionNotifier />
-        {children}
+        <CrmFeedbackProvider>{children}</CrmFeedbackProvider>
       </body>
     </html>
   );

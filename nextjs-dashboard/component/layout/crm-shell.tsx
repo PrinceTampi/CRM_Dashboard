@@ -258,19 +258,54 @@ function CrmModal({
   );
 }
 
-export function CrmShell({ title, crumb = 'Main', children, restrictedAccess = false }: CrmShellProps & { restrictedAccess?: boolean }) {
-  const pathname = usePathname();
-  const router = useRouter();
-
-  const [collapsed, setCollapsed] = useState(false);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [currentDate, setCurrentDate] = useState('');
+export function CrmFeedbackProvider({ children }: { children: React.ReactNode }) {
   const [modal, setModal] = useState<ModalState>({
     isOpen: false,
     title: '',
     body: null,
   });
   const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const openModal = (title: string, body: React.ReactNode, onDownloadCsv?: () => void) => {
+    setModal({ isOpen: true, title, body, onDownloadCsv });
+  };
+
+  const closeModal = () => {
+    setModal((previous) => ({ ...previous, isOpen: false }));
+  };
+
+  const showToast = (type: ToastType, message: string) => {
+    const id = Date.now() + Math.random();
+    setToasts((current) => [...current, { id, type, message }].slice(-4));
+    const duration = type === 'error' ? 8000 : type === 'warning' ? 6500 : type === 'info' ? 5000 : 4500;
+    window.setTimeout(() => {
+      setToasts((current) => current.filter((toast) => toast.id !== id));
+    }, duration);
+  };
+
+  const closeToast = (id: number) => {
+    setToasts((current) => current.filter((toast) => toast.id !== id));
+  };
+
+  return (
+    <ModalContext.Provider value={{ openModal, closeModal }}>
+      <ToastContext.Provider value={{ showToast }}>
+        {children}
+        <CrmModal modal={modal} onClose={closeModal} />
+        <ToastStack toasts={toasts} onClose={closeToast} />
+      </ToastContext.Provider>
+    </ModalContext.Provider>
+  );
+}
+
+export function CrmShell({ title, crumb = 'Main', children, restrictedAccess = false }: CrmShellProps & { restrictedAccess?: boolean }) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const { showToast } = useCrmToast();
+
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [currentDate, setCurrentDate] = useState('');
 
   useEffect(() => {
     const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
@@ -300,32 +335,6 @@ export function CrmShell({ title, crumb = 'Main', children, restrictedAccess = f
     };
   }, []);
 
-  const openModal = (title: string, body: React.ReactNode, onDownloadCsv?: () => void) => {
-    setModal({
-      isOpen: true,
-      title,
-      body,
-      onDownloadCsv,
-    });
-  };
-
-  const closeModal = () => {
-    setModal((prev) => ({ ...prev, isOpen: false }));
-  };
-
-  const showToast = (type: ToastType, message: string) => {
-    const id = Date.now() + Math.random();
-    setToasts((current) => [...current, { id, type, message }].slice(-4));
-    const duration = type === 'error' ? 8000 : type === 'warning' ? 6500 : type === 'info' ? 5000 : 4500;
-    window.setTimeout(() => {
-      setToasts((current) => current.filter((toast) => toast.id !== id));
-    }, duration);
-  };
-
-  const closeToast = (id: number) => {
-    setToasts((current) => current.filter((toast) => toast.id !== id));
-  };
-
   const handleLogout = async () => {
     await signOut({ callbackUrl: '/login' });
   };
@@ -337,8 +346,6 @@ export function CrmShell({ title, crumb = 'Main', children, restrictedAccess = f
   };
 
   return (
-    <ModalContext.Provider value={{ openModal, closeModal }}>
-      <ToastContext.Provider value={{ showToast }}>
       <div id="dashboardPage" className="page-container" style={{ display: 'block' }}>
         <div className={`app-shell ${collapsed ? 'sidebar-collapsed' : ''}`} id="appShell">
           <div
@@ -388,10 +395,5 @@ export function CrmShell({ title, crumb = 'Main', children, restrictedAccess = f
           </div>
         </div>
       </div>
-
-      <CrmModal modal={modal} onClose={closeModal} />
-      <ToastStack toasts={toasts} onClose={closeToast} />
-      </ToastContext.Provider>
-    </ModalContext.Provider>
   );
 }
